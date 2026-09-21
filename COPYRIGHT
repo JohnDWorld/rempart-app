@@ -1,0 +1,33 @@
+Rempart Messenger - messagerie chiffree de bout en bout, hebergement souverain
+Copyright (C) 2026 John Demory
+
+Ce programme est un logiciel libre : vous pouvez le redistribuer et/ou le
+modifier selon les termes de la GNU Affero General Public License telle que
+publiee par la Free Software Foundation, soit la version 3 de la licence, soit
+(a votre choix) toute version ulterieure.
+
+Ce programme est distribue dans l'espoir qu'il sera utile, mais SANS AUCUNE
+GARANTIE, ni meme la garantie implicite de QUALITE MARCHANDE ou d'ADEQUATION A
+UN USAGE PARTICULIER. Voir la GNU Affero General Public License pour plus de
+details.
+
+Vous devez avoir recu une copie de la GNU Affero General Public License en meme
+temps que ce programme (fichier LICENSE). Sinon, voir
+<https://www.gnu.org/licenses/>.
+
+---
+
+Pourquoi l'AGPL : le protocole Matrix (paquet `matrix`) et le chiffrement
+(`vodozemac`, `flutter_vodozemac`), tous trois edites par Famedly, sont sous
+AGPL-3.0-or-later. L'application est donc une oeuvre combinee, et la licence se
+propage. Ce n'est pas un choix subi pour autant : le code d'une messagerie qui
+se reclame de la souverainete gagne a etre lisible par ceux qui lui confient
+leurs conversations.
+
+Ce que la licence ne couvre pas, parce que ces programmes ne se lient a aucun
+code AGPL et vivent dans un depot separe : l'infrastructure serveur, la
+passerelle a bots et les agents de la Boutique.
+
+Ce qu'elle ne couvre pas non plus, parce qu'une licence de logiciel libre ne
+transmet aucun droit de marque : le nom « Rempart » et le logo. Voir
+TRADEMARK.md.

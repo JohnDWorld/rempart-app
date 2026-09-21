@@ -1,0 +1,153 @@
+name: rempart_app
+description: Rempart - Messagerie souveraine avec chiffrement E2E
+publish_to: 'none'
+version: 1.0.0+64
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # ===========================================
+  # SUPABASE
+  # ===========================================
+  supabase_flutter: ^2.3.0
+
+  # ===========================================
+  # STATE MANAGEMENT
+  # ===========================================
+  flutter_riverpod: ^3.3.2
+
+  # ===========================================
+  # NAVIGATION
+  # ===========================================
+  go_router: ^17.3.0
+
+  # ===========================================
+  # STOCKAGE LOCAL
+  # ===========================================
+  flutter_secure_storage: ^10.3.1
+  shared_preferences: ^2.2.2
+  hive_flutter: ^1.1.0
+  sqflite: ^2.3.0
+  path_provider: ^2.1.1
+
+  # ===========================================
+  # UI/UX
+  # ===========================================
+  cupertino_icons: ^1.0.6
+  flutter_svg: ^2.0.9
+  cached_network_image: ^3.3.1
+  shimmer: ^3.0.0
+  # Scroll par index : sauter à un message précis depuis la recherche
+  # (ListView.builder ne sait pas viser un index, les bulles ayant des hauteurs
+  # variables).
+  scrollable_positioned_list: ^0.3.8
+
+  # ===========================================
+  # FORMULAIRES
+  # ===========================================
+  flutter_form_builder: ^10.2.0
+  form_builder_validators: ^11.0.0
+
+  # ===========================================
+  # UTILITAIRES
+  # ===========================================
+  intl: any
+  equatable: ^2.0.5
+  dartz: ^0.10.1
+  uuid: ^4.3.3
+  logger: ^2.0.2+1
+  matrix: ^7.4.0
+  vodozemac: ^0.5.0 # crypto E2E (types + init)
+  flutter_vodozemac: ^0.5.0 # build/chargement de la lib native vodozemac
+  package_info_plus: ^9.0.1 # version installee, comparee au manifeste de maj
+  # Analyse du `formatted_body` Matrix (sous-ensemble HTML) pour le rendu des
+  # messages : blocs de code, citations, emphases. Déjà tiré par le SDK Matrix,
+  # déclaré ici parce qu'on l'utilise directement.
+  html: ^0.15.6
+
+  # ===========================================
+  # CONFIGURATION ENVIRONNEMENT
+  # ===========================================
+  flutter_dotenv: ^6.0.1
+  # share_plus reste en 12.x : la 13.x exige win32 ^6, incompatible avec
+  # file_picker (win32 ^5.9). win32 ne concerne que les builds Windows.
+  share_plus: ^12.0.0
+  url_launcher: ^6.3.2
+
+  # ===========================================
+  # MEDIA (pieces jointes)
+  # ===========================================
+  image_picker: ^1.2.3 # photos et videos (galerie + appareil photo)
+  file_picker: ^10.3.3 # documents et fichiers quelconques
+  # Enregistrement dans la galerie du telephone : sans lui, une photo recue ne
+  # peut que se partager, jamais se garder.
+  gal: ^2.3.3
+
+  # ===========================================
+  # NOTIFICATIONS
+  # ===========================================
+  flutter_local_notifications: ^22.2.0 # affichage des notifications
+  # UnifiedPush : push souverain sans Google FCM. Le telephone recoit via un
+  # distributeur (ntfy) relie au serveur Rempart.
+  unifiedpush: ^6.2.0
+  flutter_foreground_task: ^10.0.0
+  sentry_flutter: ^9.7.0 # rapports de plantage vers GlitchTip (auto-heberge)
+
+  firebase_core: ^4.12.1
+  firebase_messaging: ^16.4.3
+  qr_flutter: ^4.1.0
+  mobile_scanner: ^7.4.0
+  crypto: ^3.0.7
+  pointycastle: ^4.0.0
+  http: ^1.6.0
+  record: ^7.1.1
+  audioplayers: ^6.8.1
+  flutter_image_compress: ^2.5.1
+
+  # ===========================================
+  # BIOMETRIE (ajouter plus tard)
+  # ===========================================
+  # local_auth: ^2.1.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+  # App icon generation
+  flutter_launcher_icons: ^0.14.3
+
+# ===========================================
+# CONFIGURATION LAUNCHER ICONS
+# ===========================================
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/images/app-icon.png"
+  adaptive_icon_background: "#1e3048"
+  adaptive_icon_foreground: "assets/images/app-icon.png"
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+    - assets/fonts/Inter-LICENSE.txt
+    - .env
+
+  # Police embarquee et non telechargee : l'app doit s'afficher sans reseau,
+  # ce qui exclut google_fonts et son chargement a la volee. Inter est sous
+  # licence OFL (voir assets/fonts/Inter-LICENSE.txt).
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700

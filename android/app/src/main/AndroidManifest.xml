@@ -1,0 +1,152 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Requise pour tout accès réseau (Supabase, Matrix, gateway). Le template
+         Flutter ne la déclare que dans les manifestes debug/profile : sans cette
+         ligne dans le manifeste principal, les builds RELEASE n'ont aucun accès
+         réseau (« Serveur injoignable » alors que le debug fonctionne). -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Android 13+ : afficher les notifications de nouveaux messages
+         (l autorisation est demandee a l execution par l app). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Service de premier plan : garde la connexion Matrix vivante quand
+         l app est en arriere-plan et qu aucun distributeur UnifiedPush n est
+         installe (repli). remoteMessaging decrit exactement l usage. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
+
+    <!-- Enregistrement d'une piece jointe dans la galerie. A partir d'Android 11
+         (API 30) le systeme passe par MediaStore et n'exige plus rien ; la
+         permission ne sert donc qu'aux versions anterieures, d'ou maxSdkVersion. -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29" />
+
+    <!-- Mise a jour de l'application par elle-meme, hors magasin. L'utilisateur
+         garde le dernier mot : Android lui demande d'autoriser cette source, une
+         fois, avant la premiere installation.
+         A RETIRER pour un depot sur Google Play, qui interdit a une application
+         de se mettre a jour en dehors du magasin. -->
+    <!-- Scanner le code de verification d'un autre appareil. Demandee a
+         l'execution, et uniquement quand on ouvre le scanner : Rempart ne
+         touche pas a la camera autrement. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Sans cela, le Play Store masquerait l'application aux telephones sans
+         camera, alors qu'elle y fonctionne entierement (la verification se
+         fait aussi par symboles). -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <!-- Enregistrer un message vocal. Demandee a l'execution, et uniquement
+         quand on appuie sur le micro : Rempart n'ecoute jamais autrement. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Sans cela, le Play Store masquerait l'application aux appareils sans
+         micro, alors que tout le reste y fonctionne. -->
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <application
+        android:label="Rempart"
+        android:name="${applicationName}"
+        android:icon="@mipmap/ic_launcher"
+        android:enableOnBackInvokedCallback="true"
+        android:usesCleartextTraffic="true"
+        android:networkSecurityConfig="@xml/network_security_config">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:taskAffinity=""
+            android:theme="@style/LaunchTheme"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize">
+            <!-- Specifies an Android theme to apply to this Activity as soon as
+                 the Android process has started. This theme is visible to the user
+                 while the Flutter UI initializes. After that, this theme continues
+                 to determine the Window background behind the Flutter UI. -->
+            <meta-data
+              android:name="io.flutter.embedding.android.NormalTheme"
+              android:resource="@style/NormalTheme"
+              />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+            <!-- Liens de Supabase : confirmation d'inscription (login-callback)
+                 et mot de passe oublie (reset-callback). Sans ce filtre, le lien
+                 du courriel n'ouvre rien du tout : Android ne sait pas a qui
+                 remettre une adresse en fr.rempart_messenger.app://, et la
+                 personne reste devant une page d'erreur de son navigateur. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="fr.rempart_messenger.app"/>
+            </intent-filter>
+        </activity>
+        <!-- Don't delete the meta-data below.
+             This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
+        <meta-data
+            android:name="flutterEmbedding"
+            android:value="2" />
+
+        <!-- Passe l'APK telecharge a l'installateur d'Android. Depuis Android 7,
+             un fichier ne se partage plus par son chemin (file://) mais par un
+             content:// que ce fournisseur delivre, pour la seule duree de
+             l'intention et pour le seul dossier declare. L'autorite porte un
+             suffixe propre : les greffons image_picker et file_picker en
+             declarent deja une, et deux fournisseurs de meme autorite font
+             echouer l'installation de l'application entiere. -->
+        <!-- Fin de telechargement d'une mise a jour. Declare ici et non
+             enregistre a l'execution : il doit s'executer meme quand Rempart
+             n'est plus lance. Exporte comme l'exige un broadcast du systeme,
+             et sans confiance : il verifie l'identifiant puis l'empreinte. -->
+        <receiver
+            android:name=".MajTelecharge"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.DOWNLOAD_COMPLETE" />
+            </intent-filter>
+        </receiver>
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.maj"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/chemins_maj" />
+        </provider>
+
+        <!-- Nom impose par flutter_foreground_task, ne pas renommer. -->
+        <service
+            android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
+            android:foregroundServiceType="remoteMessaging"
+            android:exported="false" />
+    </application>
+    <!-- Required to query activities that can process text, see:
+         https://developer.android.com/training/package-visibility and
+         https://developer.android.com/reference/android/content/Intent#ACTION_PROCESS_TEXT.
+
+         In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.PROCESS_TEXT"/>
+            <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- Ouvrir l'application e-mail (mailto) pour exporter la clé de récupération. -->
+        <intent>
+            <action android:name="android.intent.action.SENDTO"/>
+            <data android:scheme="mailto"/>
+        </intent>
+        <!-- Ouvrir dans le navigateur un lien reçu dans un message.
+             Depuis Android 11, une application ne voit que ce qu'elle déclare
+             ici : sans ces deux intentions, le système répond qu'aucun
+             navigateur n'existe, et le lien reste mort sans aucune erreur. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="http"/>
+        </intent>
+    </queries>
+</manifest>

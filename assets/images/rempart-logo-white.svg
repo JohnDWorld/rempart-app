@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Rempart Logo - Monochrome blanc (pour fonds sombres) -->
+  
+  <!-- Hexagon blanc (contour seulement) -->
+  <path fill="none" stroke="#ffffff" stroke-width="22" stroke-linejoin="round" stroke-linecap="round"
+        d="M 256 55 
+           Q 266 55 276 61
+           L 418 152
+           Q 432 161 432 176
+           L 432 336
+           Q 432 351 418 360
+           L 276 451
+           Q 266 457 256 457
+           Q 246 457 236 451
+           L 94 360
+           Q 80 351 80 336
+           L 80 176
+           Q 80 161 94 152
+           L 236 61
+           Q 246 55 256 55
+           Z"/>
+  
+  <!-- Letter R blanc avec encoches intégrées -->
+  <path fill="#ffffff" fill-rule="evenodd" d="
+    M 185 145
+    L 185 367
+    L 227 367
+    L 227 285
+    L 285 367
+    L 340 367
+    L 275 278
+    Q 342 265 342 218
+    Q 342 170 300 152
+    Q 285 145 260 145
+    L 185 145
+    Z
+    M 227 185
+    L 260 185
+    Q 285 185 295 195
+    Q 305 205 305 218
+    Q 305 235 295 243
+    Q 285 252 260 252
+    L 227 252
+    L 227 185
+    Z
+    M 185 167 L 203 167 L 203 192 L 185 192 Z
+    M 185 218 L 203 218 L 203 243 L 185 243 Z
+    M 185 269 L 203 269 L 203 294 L 185 294 Z
+    M 185 320 L 203 320 L 203 345 L 185 345 Z
+  "/>
+  
+</svg>

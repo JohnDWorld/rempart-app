@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Pour joindre une photo ou une vidéo à un message, et pour choisir votre photo de profil ou celle d'un groupe.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Pour enregistrer dans vos photos une image ou une vidéo reçue dans une conversation.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Pour scanner le code de vérification affiché par un autre de vos appareils. Rempart n'utilise la caméra qu'à ce moment-là.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Pour enregistrer un message vocal. Rempart n'utilise le micro que pendant que vous enregistrez.</string>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>Rempart App</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<!-- Meme role que l'intent-filter du manifeste Android : c'est ce qui fait
+	     qu'un lien de Supabase (inscription, mot de passe oublie) ouvre
+	     l'application au lieu d'echouer dans le navigateur. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>fr.rempart_messenger.app</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>fr.rempart_messenger.app</string>
+			</array>
+		</dict>
+	</array>
+	<key>CFBundleName</key>
+	<string>rempart_app</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>$(FLUTTER_BUILD_NAME)</string>
+	<key>CFBundleSignature</key>
+	<string>????</string>
+	<key>CFBundleVersion</key>
+	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+		<key>UISceneConfigurations</key>
+		<dict>
+			<key>UIWindowSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneClassName</key>
+					<string>UIWindowScene</string>
+					<key>UISceneConfigurationName</key>
+					<string>flutter</string>
+					<key>UISceneDelegateClassName</key>
+					<string>FlutterSceneDelegate</string>
+					<key>UISceneStoryboardFile</key>
+					<string>Main</string>
+				</dict>
+			</array>
+		</dict>
+	</dict>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
+	<key>UIMainStoryboardFile</key>
+	<string>Main</string>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<!-- Rempart chiffre les conversations de bout en bout : c'est la fonction
+	     meme de l'application, pas un simple HTTPS. Elle ne releve donc pas de
+	     l'exemption, et cette cle doit valoir true. La declarer false pour
+	     eviter les questions d'Apple serait une fausse declaration.
+	     A completer par ITSEncryptionExportComplianceCode une fois la
+	     classification a l'exportation obtenue, sinon Apple repose la question
+	     a chaque envoi. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<true/>
+</dict>
+</plist>

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Build de developpement : les serveurs (Supabase, Matrix, gateway) sont joints
+  en HTTP clair via Tailscale (http://100.64.0.10). Android bloque le clair dans
+  les builds release depuis Android 9 : sans ceci, la connexion echoue
+  silencieusement (« Une erreur est survenue »). On autorise donc le clair
+  globalement tant qu'on n'est pas en HTTPS.
+
+  A durcir en prod (serveurs HTTPS) : remplacer par un base-config
+  cleartextTrafficPermitted="false" + un domain-config restreint si besoin.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>
