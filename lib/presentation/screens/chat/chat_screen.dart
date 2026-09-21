@@ -31,6 +31,7 @@ import '../../widgets/adaptive/adaptive.dart';
 import '../../widgets/chat/glisser_pour_repondre.dart';
 import '../../widgets/chat/message_bubble.dart';
 import '../../widgets/chat/message_input.dart';
+import '../../widgets/chat/selection_texte.dart';
 import '../../widgets/chat/visionneuse_image.dart';
 import '../../widgets/common/deleted_account_badge.dart';
 import '../../widgets/common/encryption_badge.dart';
@@ -891,6 +892,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             },
             child: const Text('Copier'),
           ),
+          if (_texteAffiche(event).trim().isNotEmpty)
+            CupertinoActionSheetAction(
+              onPressed: () {
+                Navigator.pop(context);
+                ouvrirSelectionTexte(context, _texteAffiche(event));
+              },
+              child: const Text('Sélectionner le texte'),
+            ),
           if (event.porteUnFichier) ...[
             CupertinoActionSheetAction(
               onPressed: () {
@@ -1053,6 +1062,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 _copierMessage(event);
               },
             ),
+            // Pour n'en copier qu'un morceau : « Copier » prend tout, ce qui
+            // ne convient pas quand on veut juste une adresse ou une date au
+            // milieu d'un long message.
+            if (_texteAffiche(event).trim().isNotEmpty)
+              ListTile(
+                leading: const Icon(Icons.text_fields),
+                title: const Text('Sélectionner le texte'),
+                onTap: () {
+                  Navigator.pop(context);
+                  ouvrirSelectionTexte(context, _texteAffiche(event));
+                },
+              ),
             if (event.porteUnFichier) ...[
               ListTile(
                 leading: const Icon(Icons.download_outlined),
@@ -2026,11 +2047,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-          fontStyle: FontStyle.italic,
-          color: isIOS
-              ? CupertinoColors.systemBlue
-              : Theme.of(context).colorScheme.primary,
-        ),
+              fontStyle: FontStyle.italic,
+              color: isIOS
+                  ? CupertinoColors.systemBlue
+                  : Theme.of(context).colorScheme.primary,
+            ),
       );
     }
 
@@ -2054,8 +2075,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       // tenait 2,61:1, et même le vert système d'iOS, 2,22:1. Pour une icône
       // la convention d'Apple primerait ; pour un texte, la lisibilité.
       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-        color: RempartTokens.texteSucces(Theme.of(context).brightness),
-      ),
+            color: RempartTokens.texteSucces(Theme.of(context).brightness),
+          ),
     );
   }
 
@@ -2125,10 +2146,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           Text(
             'Envoyez le premier message !',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: isIOS
-                  ? CupertinoColors.systemGrey
-                  : Theme.of(context).colorScheme.outline,
-            ),
+                  color: isIOS
+                      ? CupertinoColors.systemGrey
+                      : Theme.of(context).colorScheme.outline,
+                ),
           ),
         ],
       ),

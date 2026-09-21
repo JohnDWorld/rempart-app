@@ -3,7 +3,7 @@
 Messagerie chiffree de bout en bout (protocole Matrix), hebergement souverain
 en France. Ce depot porte le code de l'application Flutter (Android, iOS, web).
 
-**Version publiee : 1.0.0+65**
+**Version publiee : 1.0.0+66**
 
 ## Licence
 

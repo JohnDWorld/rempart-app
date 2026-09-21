@@ -156,7 +156,7 @@ class _MessageInputState extends State<MessageInput> {
 
   void _choisirCommande(BotCommand c) {
     // La commande REMPLACE la ligne : elle en occupait deja tout le debut.
-    final jeton = c.commande.split(' ').first;   // « /echo <texte> » -> « /echo »
+    final jeton = c.commande.split(' ').first; // « /echo <texte> » -> « /echo »
     _controller.value = TextEditingValue(
       text: '$jeton ',
       selection: TextSelection.collapsed(offset: jeton.length + 1),
@@ -518,155 +518,179 @@ class _MessageInputState extends State<MessageInput> {
                   ),
                   borderRadius: BorderRadius.circular(28),
                   border: Border.all(
-                    color:
-                        colorScheme.outlineVariant.withValues(alpha: 0.7),
+                    color: colorScheme.outlineVariant.withValues(alpha: 0.7),
                   ),
                   boxShadow: RempartTokens.ombreDouce(theme.brightness),
                 ),
                 child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Membres proposés après un « @ »
-              if (_mentions.isNotEmpty) _listeMentions(context),
-              if (_commandes.isNotEmpty) _listeCommandes(context),
-
-              // Prévisualisation de la réponse
-              if (widget.replyTo != null) _buildReplyPreview(context),
-
-              // Barre de saisie
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                child: _enregistre
-                    ? _barreEnregistrement(context)
-                    : Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Menu des commandes, devant la pièce jointe : dans une
-                    // conversation avec un bot, c'est ce qu'on cherche le plus
-                    // souvent. Absent ailleurs, où il n'aurait rien à montrer.
-                    if (widget.commandes.isNotEmpty)
-                      IconButton(
-                        onPressed: widget.enabled ? _ouvrirCommandes : null,
-                        icon: const Icon(Icons.menu),
-                        tooltip: 'Commandes',
-                        color: colorScheme.onSurfaceVariant,
-                        constraints: _tailleBouton,
-                        padding: EdgeInsets.zero,
-                      ),
+                    // Membres proposés après un « @ »
+                    if (_mentions.isNotEmpty) _listeMentions(context),
+                    if (_commandes.isNotEmpty) _listeCommandes(context),
 
-                    // Bouton pièce jointe
-                    IconButton(
-                      onPressed:
-                          widget.enabled ? widget.onAttachmentPressed : null,
-                      icon: const Icon(Icons.attach_file),
-                      color: colorScheme.onSurfaceVariant,
-                      constraints: _tailleBouton,
-                      padding: EdgeInsets.zero,
-                    ),
+                    // Prévisualisation de la réponse
+                    if (widget.replyTo != null) _buildReplyPreview(context),
 
-                    // Champ de texte, à même la capsule : un second fond
-                    // arrondi dans un fond arrondi fait boîte dans la boîte.
-                    Expanded(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxHeight: 120),
-                        child: TextField(
-                          controller: _controller,
-                          focusNode: _focusNode,
-                          enabled: widget.enabled,
-                          // Une liste se poursuit toute seule : passer à la
-                          // ligne depuis « - sucrine » ouvre la puce suivante,
-                          // et un second passage sur une puce vide la retire.
-                          inputFormatters: const [ContinuerListe()],
-                          onChanged: (_) => _onTextChanged(),
-                          onSubmitted: (_) => _sendMessage(),
-                          maxLines: null,
-                          textCapitalization: TextCapitalization.sentences,
-                          decoration: const InputDecoration(
-                            hintText: 'Message...',
-                            // Le fond arrondi est celui du conteneur : le
-                            // remplissage du thème, lui, se dessine en
-                            // rectangle dès que la bordure est retirée, et
-                            // carrait les extrémités du champ.
-                            filled: false,
-                            // Le champ n'a pas de bordure propre : c'est le
-                            // conteneur qui la porte. Sans ces trois lignes,
-                            // celle du thème se superpose au focus et double
-                            // le trait.
-                            border: InputBorder.none,
-                            enabledBorder: InputBorder.none,
-                            focusedBorder: InputBorder.none,
-                            // Le bouton voisin porte deja son propre
-                            // espacement : en remettre autant a l'horizontale
-                            // eloignait le texte de son trombone sans raison.
-                            //
-                            // Un point de plus en haut qu'en bas, et ce n'est
-                            // pas un caprice : la rangee s'aligne sur le bas,
-                            // ou le centre d'une icone tombe a 24 du sol. Le
-                            // centre du texte, lui, tombe a « creux bas +
-                            // moitie de l'interligne ». Les deux ne coincident
-                            // qu'a cette condition, et la hauteur de la barre
-                            // ne bouge pas.
-                            contentPadding: EdgeInsets.fromLTRB(
-                              RempartTokens.espaceXs,
-                              15,
-                              RempartTokens.espaceXs,
-                              13,
-                            ),
-                          ),
-                        ),
+                    // Barre de saisie
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: RempartTokens.espaceXs,
                       ),
-                    ),
+                      child: _enregistre
+                          ? _barreEnregistrement(context)
+                          : Row(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                // Menu des commandes, devant la pièce jointe : dans une
+                                // conversation avec un bot, c'est ce qu'on cherche le plus
+                                // souvent. Absent ailleurs, où il n'aurait rien à montrer.
+                                if (widget.commandes.isNotEmpty)
+                                  IconButton(
+                                    onPressed: widget.enabled
+                                        ? _ouvrirCommandes
+                                        : null,
+                                    icon: const Icon(Icons.menu),
+                                    tooltip: 'Commandes',
+                                    color: colorScheme.onSurfaceVariant,
+                                    constraints: _tailleBouton,
+                                    padding: EdgeInsets.zero,
+                                  ),
 
-                    const SizedBox(width: 8),
+                                // Bouton pièce jointe
+                                IconButton(
+                                  onPressed: widget.enabled
+                                      ? widget.onAttachmentPressed
+                                      : null,
+                                  icon: const Icon(Icons.attach_file),
+                                  color: colorScheme.onSurfaceVariant,
+                                  constraints: _tailleBouton,
+                                  padding: EdgeInsets.zero,
+                                ),
 
-                    // Bouton envoyer : le micro devient un bouton plein dès
-                    // qu'il y a quelque chose à envoyer. Le fondu évite le
-                    // clignotement à chaque première lettre.
-                    AnimatedSwitcher(
-                      duration: dureeAnimation(
-                        context,
-                        const Duration(milliseconds: 180),
-                      ),
-                      transitionBuilder: (enfant, animation) => ScaleTransition(
-                        scale: animation,
-                        child: FadeTransition(opacity: animation, child: enfant),
-                      ),
-                      child: _hasText
-                          ? DecoratedBox(
-                              key: const ValueKey('envoyer'),
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                boxShadow:
-                                    RempartTokens.ombreLegere(theme.brightness),
-                              ),
-                              child: IconButton.filled(
-                                onPressed: widget.enabled ? _sendMessage : null,
-                                icon: const Icon(Icons.arrow_upward_rounded),
-                                tooltip: 'Envoyer',
-                              ),
-                            )
-                          : DecoratedBox(
-                              key: const ValueKey('micro'),
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                boxShadow:
-                                    RempartTokens.ombreLegere(theme.brightness),
-                              ),
-                              child: IconButton.filled(
-                                onPressed: widget.enabled &&
-                                        widget.onVocal != null &&
-                                        EnregistreurVocal.instance.disponible
-                                    ? _demarrerEnregistrement
-                                    : null,
-                                icon: const Icon(Icons.mic_none_rounded),
-                                tooltip: 'Message vocal',
-                              ),
+                                // Champ de texte, à même la capsule : un second fond
+                                // arrondi dans un fond arrondi fait boîte dans la boîte.
+                                Expanded(
+                                  child: ConstrainedBox(
+                                    constraints:
+                                        const BoxConstraints(maxHeight: 120),
+                                    child: TextField(
+                                      controller: _controller,
+                                      focusNode: _focusNode,
+                                      enabled: widget.enabled,
+                                      // Une liste se poursuit toute seule : passer à la
+                                      // ligne depuis « - sucrine » ouvre la puce suivante,
+                                      // et un second passage sur une puce vide la retire.
+                                      inputFormatters: const [ContinuerListe()],
+                                      onChanged: (_) => _onTextChanged(),
+                                      onSubmitted: (_) => _sendMessage(),
+                                      maxLines: null,
+                                      textCapitalization:
+                                          TextCapitalization.sentences,
+                                      decoration: const InputDecoration(
+                                        hintText: 'Message...',
+                                        // Le fond arrondi est celui du conteneur : le
+                                        // remplissage du thème, lui, se dessine en
+                                        // rectangle dès que la bordure est retirée, et
+                                        // carrait les extrémités du champ.
+                                        filled: false,
+                                        // Le champ n'a pas de bordure propre : c'est le
+                                        // conteneur qui la porte. Sans ces trois lignes,
+                                        // celle du thème se superpose au focus et double
+                                        // le trait.
+                                        border: InputBorder.none,
+                                        enabledBorder: InputBorder.none,
+                                        focusedBorder: InputBorder.none,
+                                        // Le bouton voisin porte deja son propre
+                                        // espacement : en remettre autant a l'horizontale
+                                        // eloignait le texte de son trombone sans raison.
+                                        //
+                                        // Le creux BAS ne se touche pas : la rangee
+                                        // s'aligne sur le bas, ou le centre d'une icone
+                                        // tombe a 24 du sol, et le centre du texte a
+                                        // « creux bas + moitie de l'interligne ». Les deux
+                                        // ne coincident qu'a 13.
+                                        //
+                                        // Le creux HAUT est passe de 15 a 12, et pas plus
+                                        // bas. Sur une ligne il ne coute rien (la hauteur
+                                        // vient des boutons, 48 points, et le decorateur
+                                        // absorbe tout ce qui passe sous 12) ; sur
+                                        // plusieurs, il pose une bande vide au-dessus de la
+                                        // premiere ligne. Mesure a l'appui : 12 laisse le
+                                        // texte exactement la ou 15 le laissait, 9 le
+                                        // decale d'un point et 6 de trois et demi, ce que
+                                        // `barre_saisie_alignement_test` refuse.
+                                        contentPadding: EdgeInsets.fromLTRB(
+                                          RempartTokens.espaceXs,
+                                          12,
+                                          RempartTokens.espaceXs,
+                                          13,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+
+                                const SizedBox(width: 8),
+
+                                // Bouton envoyer : le micro devient un bouton plein dès
+                                // qu'il y a quelque chose à envoyer. Le fondu évite le
+                                // clignotement à chaque première lettre.
+                                AnimatedSwitcher(
+                                  duration: dureeAnimation(
+                                    context,
+                                    const Duration(milliseconds: 180),
+                                  ),
+                                  transitionBuilder: (enfant, animation) =>
+                                      ScaleTransition(
+                                    scale: animation,
+                                    child: FadeTransition(
+                                        opacity: animation, child: enfant),
+                                  ),
+                                  child: _hasText
+                                      ? DecoratedBox(
+                                          key: const ValueKey('envoyer'),
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            boxShadow:
+                                                RempartTokens.ombreLegere(
+                                                    theme.brightness),
+                                          ),
+                                          child: IconButton.filled(
+                                            onPressed: widget.enabled
+                                                ? _sendMessage
+                                                : null,
+                                            icon: const Icon(
+                                                Icons.arrow_upward_rounded),
+                                            tooltip: 'Envoyer',
+                                          ),
+                                        )
+                                      : DecoratedBox(
+                                          key: const ValueKey('micro'),
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            boxShadow:
+                                                RempartTokens.ombreLegere(
+                                                    theme.brightness),
+                                          ),
+                                          child: IconButton.filled(
+                                            onPressed: widget.enabled &&
+                                                    widget.onVocal != null &&
+                                                    EnregistreurVocal
+                                                        .instance.disponible
+                                                ? _demarrerEnregistrement
+                                                : null,
+                                            icon: const Icon(
+                                                Icons.mic_none_rounded),
+                                            tooltip: 'Message vocal',
+                                          ),
+                                        ),
+                                ),
+                              ],
                             ),
                     ),
                   ],
-                ),
-              ),
-            ],
                 ),
               ),
             ),
@@ -716,9 +740,9 @@ class _MessageInputState extends State<MessageInput> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: colorScheme.primary,
-                  ),
+                        fontWeight: FontWeight.bold,
+                        color: colorScheme.primary,
+                      ),
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -728,8 +752,8 @@ class _MessageInputState extends State<MessageInput> {
                   // Même rôle que la citation dans la bulle : c'est le même
                   // aperçu, il était à 13 ici et à 12 là-bas.
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                  ),
+                        color: colorScheme.onSurfaceVariant,
+                      ),
                 ),
               ],
             ),

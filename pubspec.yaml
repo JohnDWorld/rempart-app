@@ -1,11 +1,18 @@
 name: rempart_app
 description: Rempart - Messagerie souveraine avec chiffrement E2E
 publish_to: 'none'
-version: 1.0.0+65
+version: 1.0.0+66
 environment:
   sdk: '>=3.3.0 <4.0.0'
 
 dependencies:
+  # Traduit les libelles fournis par Flutter lui-meme : « Coller », « Tout
+  # selectionner », les mois du selecteur de date. Sans lui, `locale: fr` ne
+  # change rien, les delegues par defaut n'existant qu'en anglais, et le menu
+  # d'un appui long sur du texte proposait « Paste » au milieu d'une
+  # application entierement francaise.
+  flutter_localizations:
+    sdk: flutter
   flutter:
     sdk: flutter
 

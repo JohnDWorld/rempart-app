@@ -2,6 +2,7 @@ import 'dart:ui';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/plateforme.dart';
@@ -15,6 +16,25 @@ import 'theme.dart';
 
 /// Application principale Rempart
 /// Utilise CupertinoApp sur iOS et MaterialApp sur Android
+/// Les délégués qui traduisent les libellés fournis par Flutter lui-même :
+/// « Coller », « Tout sélectionner », les mois d'un sélecteur de date.
+///
+/// Partagés par les deux applications, Material et Cupertino, et exposés parce
+/// qu'un test les vérifie : les délégués `Default*` d'origine rendaient bien
+/// les widgets utilisables, mais en anglais, quel que soit le `locale`
+/// demandé. Le menu d'un appui long proposait « Paste » au milieu d'une
+/// application entièrement française, et rien dans le code ne le disait.
+const delegationsLocalisation = <LocalizationsDelegate<dynamic>>[
+  GlobalMaterialLocalizations.delegate,
+  GlobalWidgetsLocalizations.delegate,
+  GlobalCupertinoLocalizations.delegate,
+];
+
+/// Rempart n'existe qu'en français. Laisser la liste par défaut (l'anglais
+/// seul) ferait retomber Flutter sur ses libellés anglais, le `locale` demandé
+/// n'étant alors pas « pris en charge ».
+const languesPrisesEnCharge = <Locale>[Locale('fr', 'FR')];
+
 class RempartApp extends ConsumerWidget {
   const RempartApp({super.key});
 
@@ -60,8 +80,13 @@ class RempartApp extends ConsumerWidget {
         enfant: child ?? const SizedBox.shrink(),
       ),
 
-      // Localisation
+      // Localisation. `supportedLocales` ne porte que le francais : Rempart
+      // n'existe pas dans une autre langue, et laisser la liste par defaut
+      // (l'anglais seul) faisait retomber Flutter sur ses libelles anglais
+      // quel que soit le `locale` demande.
       locale: const Locale('fr', 'FR'),
+      supportedLocales: languesPrisesEnCharge,
+      localizationsDelegates: delegationsLocalisation,
     );
   }
 }
@@ -122,15 +147,13 @@ class _CupertinoAppWrapperState extends ConsumerState<_CupertinoAppWrapper>
       // Navigation
       routerConfig: widget.router,
 
-      // Localisation
+      // Localisation. Les delegues `Default*` d'avant n'existaient qu'en
+      // anglais : ils rendaient les widgets Material utilisables sous
+      // Cupertino, mais en anglais, d'ou le « Paste » du menu de selection.
+      // Les `Global*` font les deux, et en francais.
       locale: const Locale('fr', 'FR'),
-
-      // Permettre l'utilisation de Material widgets dans Cupertino
-      localizationsDelegates: const [
-        DefaultMaterialLocalizations.delegate,
-        DefaultCupertinoLocalizations.delegate,
-        DefaultWidgetsLocalizations.delegate,
-      ],
+      supportedLocales: languesPrisesEnCharge,
+      localizationsDelegates: delegationsLocalisation,
 
       // Builder pour injecter le thème Material à l'intérieur de l'app
       // afin que les widgets Material fonctionnent correctement
