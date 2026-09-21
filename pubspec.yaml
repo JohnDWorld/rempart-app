@@ -1,7 +1,7 @@
 name: rempart_app
 description: Rempart - Messagerie souveraine avec chiffrement E2E
 publish_to: 'none'
-version: 1.0.0+66
+version: 1.0.0+67
 environment:
   sdk: '>=3.3.0 <4.0.0'
 

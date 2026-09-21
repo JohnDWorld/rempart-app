@@ -181,10 +181,21 @@ abstract class RempartTheme {
       brightness: luminosite,
       primary: accent,
       onPrimary: sombre ? const Color(0xFF06122A) : Colors.white,
-      primaryContainer: sombre ? const Color(0xFF1E3A8A) : const Color(0xFFDBEAFE),
-      onPrimaryContainer: sombre ? const Color(0xFFDBEAFE) : RempartTokens.bleuFonce,
+      primaryContainer:
+          sombre ? const Color(0xFF1E3A8A) : const Color(0xFFDBEAFE),
+      onPrimaryContainer:
+          sombre ? const Color(0xFFDBEAFE) : RempartTokens.bleuFonce,
       secondary: secondaryColor,
       onSecondary: Colors.white,
+      // Sans ces deux lignes, `secondaryContainer` retombe sur `secondary` et
+      // `onSecondaryContainer` sur `onSecondary` : un bleu ciel vif avec du
+      // blanc dessus, soit 2,77:1, sous les 4,5:1 d'un petit texte. C'est la
+      // pastille « Rempart » des agents livres qui le portait. Un conteneur
+      // est une teinte SOURDE de sa couleur, jamais la couleur elle-meme.
+      secondaryContainer:
+          sombre ? const Color(0xFF0C4A6E) : const Color(0xFFBAE6FD),
+      onSecondaryContainer:
+          sombre ? const Color(0xFFBAE6FD) : const Color(0xFF075985),
       // Un rouge plus clair en thème sombre : `erreur` n'y tenait que 3,49:1
       // sur les surfaces, sous les 4,5:1 d'un petit texte, et c'est le rouge
       // des actions qui détruisent (« Supprimer », « Bloquer »). Le texte posé
@@ -233,7 +244,8 @@ abstract class RempartTheme {
         // L'ombre n'apparaît qu'au défilement : la barre semble alors se
         // détacher du contenu qui glisse dessous.
         scrolledUnderElevation: 3,
-        shadowColor: const Color(0xFF0F172A).withValues(alpha: sombre ? 0.6 : 0.12),
+        shadowColor:
+            const Color(0xFF0F172A).withValues(alpha: sombre ? 0.6 : 0.12),
         titleTextStyle: typo.titleLarge,
         systemOverlayStyle:
             sombre ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
@@ -269,7 +281,8 @@ abstract class RempartTheme {
           foregroundColor: couleurs.onPrimary,
           elevation: 0,
           minimumSize: const Size(0, 52),
-          padding: const EdgeInsets.symmetric(horizontal: RempartTokens.espaceXl),
+          padding:
+              const EdgeInsets.symmetric(horizontal: RempartTokens.espaceXl),
           textStyle: typo.titleMedium,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(RempartTokens.rayonChamp),
@@ -344,7 +357,8 @@ abstract class RempartTheme {
 
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
-        backgroundColor: sombre ? const Color(0xFF243349) : const Color(0xFF1E293B),
+        backgroundColor:
+            sombre ? const Color(0xFF243349) : const Color(0xFF1E293B),
         contentTextStyle: typo.bodyMedium?.copyWith(color: Colors.white),
         elevation: 6,
         insetPadding: const EdgeInsets.all(RempartTokens.espaceL),
@@ -390,7 +404,21 @@ abstract class RempartTheme {
         shape: const StadiumBorder(),
       ),
 
-      progressIndicatorTheme: ProgressIndicatorThemeData(color: accent),
+      // La piste d'une barre de progression suivait `secondaryContainer`,
+      // c'est-a-dire le bleu ciel vif : 1,86:1 contre le remplissage en clair
+      // et 1,09:1 en sombre, ou les deux moities avaient quasiment la meme
+      // luminosite. On ne voyait plus ce qui etait telecharge.
+      //
+      // La piste prend donc la teinte du remplissage, en sourdine : meme
+      // famille, deux niveaux d'ecart, 3,64:1 en clair et 4,07:1 en sombre.
+      // Au-dela de 3:1, un element graphique porteur d'information se
+      // distingue (WCAG 1.4.11).
+      progressIndicatorTheme: ProgressIndicatorThemeData(
+        color: accent,
+        linearTrackColor:
+            sombre ? const Color(0xFF1E3A8A) : const Color(0xFFBFDBFE),
+        circularTrackColor: Colors.transparent,
+      ),
 
       switchTheme: SwitchThemeData(
         thumbColor: WidgetStateProperty.resolveWith(
@@ -493,7 +521,8 @@ class CouleursCitation {
     }
     final sombre = luminosite == Brightness.dark;
     return CouleursCitation(
-      fond: sombre ? RempartTokens.citationSombre : RempartTokens.citationClaire,
+      fond:
+          sombre ? RempartTokens.citationSombre : RempartTokens.citationClaire,
       // Le bleu de marque ne tient sur aucun de ces deux fonds : trop sombre
       // sur le fond sombre, trop clair sur le fond clair. Chaque thème prend
       // donc la déclinaison qui s'en détache.

@@ -41,8 +41,7 @@ void main() {
     test('badge « chiffré » lisible sur son fond teinté ($nom)', () {
       final texte = RempartTokens.texteSucces(luminosite);
       // Le fond du badge est la teinte du texte à 10 %, posée sur la page.
-      final fondBadge =
-          Color.alphaBlend(texte.withValues(alpha: 0.10), t.fond);
+      final fondBadge = Color.alphaBlend(texte.withValues(alpha: 0.10), t.fond);
       expect(contraste(texte, fondBadge), greaterThanOrEqualTo(seuil));
     });
 
@@ -52,8 +51,7 @@ void main() {
       // tombait à 4,10:1 sur la sienne.
       final texte = RempartTokens.texteAlerte(luminosite);
       for (final fond in [t.fond, t.surface]) {
-        final fondBadge =
-            Color.alphaBlend(texte.withValues(alpha: 0.12), fond);
+        final fondBadge = Color.alphaBlend(texte.withValues(alpha: 0.12), fond);
         expect(contraste(texte, fondBadge), greaterThanOrEqualTo(seuil));
       }
     });
@@ -102,5 +100,52 @@ void main() {
       RempartTokens.fondSombre,
     );
     expect(contraste(ancien, fondBadge), lessThan(seuil));
+  });
+  for (final luminosite in [Brightness.light, Brightness.dark]) {
+    final nom = luminosite == Brightness.dark ? 'sombre' : 'clair';
+    final couleurs =
+        (luminosite == Brightness.dark ? RempartTheme.dark : RempartTheme.light)
+            .colorScheme;
+    final barre =
+        (luminosite == Brightness.dark ? RempartTheme.dark : RempartTheme.light)
+            .progressIndicatorTheme;
+
+    test('la barre de progression distingue le fait du restant ($nom)', () {
+      // Seuil WCAG 1.4.11 : un élément graphique porteur d'information se
+      // distingue à 3:1. Ici l'information EST la frontière entre les deux
+      // moitiés. La piste suivait `secondaryContainer`, un bleu ciel vif :
+      // 1,86:1 en clair et 1,09:1 en sombre, où l'on ne voyait plus rien.
+      expect(
+        contraste(barre.color!, barre.linearTrackColor!),
+        greaterThanOrEqualTo(3),
+        reason: 'remplissage ${barre.color}, piste ${barre.linearTrackColor}',
+      );
+    });
+
+    test('la piste reste visible sur sa surface ($nom)', () {
+      // L'inverse du défaut corrigé : une piste si sourde qu'elle disparaît
+      // laisse croire que la barre s'arrête là où le téléchargement en est.
+      expect(
+        contraste(barre.linearTrackColor!, couleurs.surface),
+        greaterThan(1.3),
+      );
+    });
+
+    test('la pastille « Rempart » des agents livrés est lisible ($nom)', () {
+      // `secondaryContainer` retombait sur `secondary`, un bleu ciel vif, et
+      // son texte sur du blanc : 2,77:1.
+      expect(
+        contraste(couleurs.onSecondaryContainer, couleurs.secondaryContainer),
+        greaterThanOrEqualTo(seuil),
+      );
+    });
+  }
+
+  test('le bleu ciel vif en piste échouait bien, dans les deux thèmes', () {
+    // Témoin : l'ancienne piste, celle que Flutter déduisait faute de
+    // `secondaryContainer` déclaré.
+    for (final remplissage in [RempartTokens.bleu, RempartTokens.bleuClair]) {
+      expect(contraste(RempartTheme.secondaryColor, remplissage), lessThan(3));
+    }
   });
 }
