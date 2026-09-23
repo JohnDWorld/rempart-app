@@ -70,3 +70,4 @@ test_driver/screenshots/
 # Signature de release : le keystore et son mot de passe restent hors du
 # depot ; les versions chiffrees (.enc) sont commitees, voir le Makefile.
 key.properties
+.env.production

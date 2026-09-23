@@ -162,10 +162,43 @@ abstract class TracesLogo {
     return _ajuster(chemin, centre, cote);
   }
 
-  /// Le « R », avec ses quatre encoches en créneaux.
+  /// Le « R », dont le bord gauche est crénelé.
+  ///
+  /// Le créneau, le merlon et les marges partagent la MÊME unité : c'est ce qui
+  /// fait lire un rempart plutôt qu'une crémaillère. La jambe va de 145 à 367,
+  /// soit 222, d'où la règle qui donne tout le reste :
+  ///
+  ///     222 = (2 × nombre de créneaux + 1) × unité
+  ///
+  /// Trois créneaux donnent donc une unité de 32, et une profondeur de 15 sur
+  /// une jambe large de 42. Changer le nombre sans rejouer cette règle casse le
+  /// motif : en passant de quatre à trois sans réespacer, les merlons ont
+  /// doublé de hauteur et le dessin est devenu une barre à trois entailles.
+  ///
+  /// Les mêmes valeurs vivent dans les cinq SVG et dans la page publique. Les
+  /// désaccorder donnerait deux logos selon l'écran, et cela ne se verrait que
+  /// par hasard.
+  static const _creneaux = [176.0, 240.0, 304.0];
+  static const _unite = 32.0;
+  static const _profondeur = 15.0;
+
   static Path lettreR(Offset centre, double cote) {
-    final lettre = Path()
-      ..moveTo(185, 145)
+    final lettre = Path()..moveTo(185, 145);
+
+    // Les créneaux font partie du CONTOUR, ils ne sont pas soustraits après
+    // coup. Soustraits, leur bord gauche tombait exactement sur celui du R :
+    // deux contours superposés que le rendu lisse séparément, laissant un
+    // liseré doré à 17 % d'opacité qui refermait les encoches. Mesuré, pas
+    // supposé. Un seul tracé n'a rien à annuler.
+    for (final y in _creneaux) {
+      lettre
+        ..lineTo(185, y)
+        ..lineTo(185 + _profondeur, y)
+        ..lineTo(185 + _profondeur, y + _unite)
+        ..lineTo(185, y + _unite);
+    }
+
+    lettre
       ..lineTo(185, 367)
       ..lineTo(227, 367)
       ..lineTo(227, 285)
@@ -187,19 +220,7 @@ abstract class TracesLogo {
       ..close()
       ..fillType = PathFillType.evenOdd;
 
-    // Encoches : soustraites, comme dans le SVG où elles sont peintes du
-    // fond. Un simple dessin par-dessus ne marcherait pas sur un fond
-    // dégradé.
-    final encoches = Path();
-    for (final y in [167.0, 218.0, 269.0, 320.0]) {
-      encoches.addRect(Rect.fromLTWH(185, y, 18, 25));
-    }
-
-    return _ajuster(
-      Path.combine(PathOperation.difference, lettre, encoches),
-      centre,
-      cote,
-    );
+    return _ajuster(lettre, centre, cote);
   }
 
   /// Met un tracé du repère 512 à l'échelle voulue, centré sur [centre].

@@ -1,7 +1,7 @@
 name: rempart_app
 description: Rempart - Messagerie souveraine avec chiffrement E2E
 publish_to: 'none'
-version: 1.0.0+67
+version: 1.0.0+68
 environment:
   sdk: '>=3.3.0 <4.0.0'
 
@@ -133,9 +133,16 @@ dev_dependencies:
 flutter_launcher_icons:
   android: true
   ios: true
+  # Android : premier plan transparent, le systeme pose le fond lui-meme et
+  # anime la parallaxe entre les deux.
   image_path: "assets/images/app-icon.png"
   adaptive_icon_background: "#1e3048"
   adaptive_icon_foreground: "assets/images/app-icon.png"
+  # iOS : image DEDIEE, opaque, fond marine cuit dedans. App Store Connect
+  # REJETTE tout paquet dont l icone porte un canal alpha, et l aplatissement
+  # automatique se fait sur du blanc, ou l ecusson disparait presque.
+  image_path_ios: "assets/images/app-icon-ios.png"
+  remove_alpha_ios: true
 
 flutter:
   uses-material-design: true

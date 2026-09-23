@@ -1,9 +1,13 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
+import 'package:http/http.dart' as http;
 import 'package:matrix/matrix.dart' as matrix;
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 
+import '../../core/constants/supabase_constants.dart';
 import '../models/bot.dart';
 import '../models/matrix_extensions.dart';
 import '../models/profile.dart';
@@ -635,4 +639,36 @@ final matrixInitializedProvider = Provider<bool>((ref) {
   ref.watch(matrixStateNotifierProvider);
   final matrixService = ref.watch(matrixServiceProvider);
   return matrixService.isInitialized;
+});
+
+
+// ===========================================================================
+// Inscription ouverte ou non : la reponse vient du SERVEUR
+// ===========================================================================
+
+/// Vrai quand le serveur accepte de nouvelles inscriptions.
+///
+/// La reponse n'est pas un reglage de l'application mais un drapeau de GoTrue
+/// (`DISABLE_SIGNUP`), republie par `/auth/v1/settings`. C'est ce qui rend la
+/// fermeture **reversible sans rien republier** : on remet le drapeau a false
+/// sur le serveur, on redemarre `auth`, et l'application rouvre d'elle-meme.
+/// Un drapeau cote application aurait exige un nouveau build, donc une
+/// nouvelle publication sur les magasins, pour un simple changement de date.
+///
+/// En cas de panne reseau on repond **ouvert** : mieux vaut un formulaire qui
+/// echoue en disant pourquoi qu'un ecran « bientot disponible » affiche a tort
+/// alors que le service fonctionne.
+final inscriptionOuverteProvider = FutureProvider<bool>((ref) async {
+  if (SupabaseConstants.url.isEmpty) return true;
+  try {
+    final reponse = await http.get(
+      Uri.parse('${SupabaseConstants.url}/auth/v1/settings'),
+      headers: {'apikey': SupabaseConstants.anonKey},
+    ).timeout(const Duration(seconds: 6));
+    if (reponse.statusCode != 200) return true;
+    final corps = jsonDecode(reponse.body) as Map<String, dynamic>;
+    return corps['disable_signup'] != true;
+  } catch (_) {
+    return true;
+  }
 });

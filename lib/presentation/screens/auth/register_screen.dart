@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/plateforme.dart';
+import '../../../data/providers/providers.dart';
 import '../../../services/auth_service.dart';
 import '../../widgets/common/loading_button.dart';
 
@@ -167,7 +168,73 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return _buildEcran(context);
+    // L'etat vient du serveur, jamais d'une constante compilee : rouvrir les
+    // inscriptions ne doit demander ni build, ni passage par les magasins.
+    // Tant que la reponse n'est pas la, on montre le formulaire : un ecran
+    // d'attente sur un chemin aussi court se lit comme une panne.
+    final ouverte = ref.watch(inscriptionOuverteProvider).value ?? true;
+    return ouverte ? _buildEcran(context) : _buildFerme(context);
+  }
+
+  /// Ce que voit quelqu'un quand les inscriptions sont fermees.
+  ///
+  /// Un formulaire qui refuse en 422 laisserait croire a une erreur de saisie.
+  /// On dit donc ce qui se passe, pourquoi, et ce qu'il peut faire : ecrire
+  /// pour etre prevenu. La connexion reste accessible, les comptes existants
+  /// n'etant pas concernes.
+  Widget _buildFerme(BuildContext context) {
+    final theme = Theme.of(context);
+    return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(
+          icon: Icon(Icons.adaptive.arrow_back),
+          onPressed: () => context.go('/login'),
+        ),
+      ),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SvgPicture.asset(
+                    'assets/images/rempart-logo.svg',
+                    width: 64,
+                    height: 64,
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    'Inscription bientôt disponible',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.headlineSmall
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    "Rempart n'est pas encore ouvert au public. Les comptes "
+                    'existants fonctionnent normalement, mais la création de '
+                    'nouveaux comptes attend la vérification des adresses '
+                    'électroniques.',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodyMedium
+                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                  const SizedBox(height: 28),
+                  FilledButton(
+                    onPressed: () => context.go('/login'),
+                    child: const Text('Se connecter'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   /// L'écran, identique sur les deux plateformes.

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/constants/bot_gateway_constants.dart';
 import '../../../data/models/bot.dart';
 import '../../../data/models/user_bot.dart';
 import '../../../data/providers/providers.dart';
@@ -268,8 +269,8 @@ class _MyBotsScreenState extends ConsumerState<MyBotsScreen> {
             const SizedBox(height: 12),
             const Text(
               "Token d'API (affiché une seule fois). Donnez-le à votre agent, "
-              'jamais à un tiers. Perdu ou compromis : supprimez le bot et '
-              'recréez-en un.',
+              'jamais à un tiers. Perdu ou compromis : régénérez-le depuis le '
+              'menu du bot.',
             ),
             const SizedBox(height: 12),
             Container(
@@ -284,6 +285,29 @@ class _MyBotsScreenState extends ConsumerState<MyBotsScreen> {
                 style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
               ),
             ),
+            // Un token sans l'adresse a laquelle le presenter ne sert a rien :
+            // la personne repart avec un secret et aucune idee de ce qu'elle
+            // doit appeler. Les trois voies sont nommees parce qu'elles ne se
+            // devinent pas, et que le webhook evite d'ecrire une boucle
+            // d'attente a ceux qui ont deja un serveur.
+            if (BotGatewayConstants.baseUrl.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              Text('Où le présenter', style: theme.textTheme.titleSmall),
+              const SizedBox(height: 6),
+              SelectableText(
+                BotGatewayConstants.baseUrl,
+                style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'En-tête « Authorization: Bearer <token> ». Trois façons de '
+                'brancher votre agent :\n'
+                '· /v1/getUpdates, vous relevez les messages ;\n'
+                '· /v1/setWebhook, Rempart les pousse chez vous ;\n'
+                '· /mcp, pour un client MCP, sans rien écrire.',
+                style: theme.textTheme.bodySmall,
+              ),
+            ],
           ],
         ),
         actions: [
