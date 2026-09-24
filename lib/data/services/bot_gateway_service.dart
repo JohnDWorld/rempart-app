@@ -86,6 +86,25 @@ class BotGatewayService {
     await _request('POST', '/v1/link', <String, dynamic>{'mxid': mxid});
   }
 
+  /// Fait créer le compte Matrix de l'utilisateur courant par la passerelle.
+  ///
+  /// L'application ne s'inscrit plus elle-même auprès de Synapse. Cette API
+  /// devait rester ouverte pour qu'elle le puisse, or elle est joignable par
+  /// tout l'internet : un seul appel suffisait à créer un compte sans passer
+  /// par Rempart ni par aucune vérification.
+  ///
+  /// La passerelle, elle, détient le secret partagé de Synapse. Elle crée donc
+  /// le compte alors que l'inscription publique est fermée, et seulement après
+  /// avoir vérifié, auprès de Supabase, que l'adresse est confirmée.
+  ///
+  /// L'identifiant n'est PAS envoyé : la passerelle le dérive du jeton. Un
+  /// jeton permet de créer son compte, et aucun autre.
+  Future<void> provisionMatrixAccount(String motDePasse) async {
+    await _request('POST', '/v1/provisionMatrixAccount', <String, dynamic>{
+      'password': motDePasse,
+    });
+  }
+
   /// Liste les bots de l'utilisateur connecté, avec son quota.
   /// Demande l'effacement des médias d'un groupe qu'on supprime.
   ///

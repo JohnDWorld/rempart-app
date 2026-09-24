@@ -212,15 +212,51 @@ class AuthService {
       debugPrint('Matrix: connecté en tant que $username');
     } catch (loginError) {
       debugPrint('Matrix: login échoué ($loginError), tentative inscription');
-      await MatrixService.instance.register(
-        username: username,
-        password: password,
-        displayName: displayName,
-      );
+      await _creerCompteMatrix(username, password, displayName);
       debugPrint('Matrix: compte créé pour $username');
     }
 
     _apresSessionMatrix();
+  }
+
+  /// Crée le compte Matrix, par la passerelle d'abord.
+  ///
+  /// La passerelle détient le secret partagé de Synapse : elle sait donc créer
+  /// un compte alors que l'inscription publique est FERMÉE, et ne le fait
+  /// qu'après avoir vérifié auprès de Supabase que l'adresse est confirmée.
+  /// C'est ce qui permet de fermer `enable_registration` sur le serveur, une
+  /// API que tout l'internet peut sinon appeler pour créer des comptes en
+  /// masse, sans passer par Rempart.
+  ///
+  /// Le repli sur l'inscription directe reste là **pour le développement** :
+  /// une instance locale n'a pas forcément de passerelle, et un serveur dont
+  /// l'inscription est ouverte l'acceptera. En production il ne sert pas, la
+  /// passerelle répondant la première ; s'il servait, Synapse refuserait de
+  /// toute façon.
+  Future<void> _creerCompteMatrix(
+    String username,
+    String password,
+    String? displayName,
+  ) async {
+    try {
+      await BotGatewayService().provisionMatrixAccount(password);
+      await MatrixService.instance.login(
+        username: username,
+        password: password,
+      );
+      if (displayName != null && displayName.isNotEmpty) {
+        await MatrixService.instance.definirNomAffiche(displayName);
+      }
+      return;
+    } catch (e) {
+      debugPrint('Matrix: provisioning par la passerelle indisponible ($e), '
+          'repli sur inscription directe');
+    }
+    await MatrixService.instance.register(
+      username: username,
+      password: password,
+      displayName: displayName,
+    );
   }
 
   /// Nom affiché de l'utilisateur courant, lu dans son profil Supabase.

@@ -370,21 +370,18 @@ class MatrixService {
       );
     }
 
-    // Mettre à jour le nom d'affichage si fourni
-    if (displayName != null &&
-        displayName.isNotEmpty &&
-        _client!.userID != null) {
+    // Un nom absent n'est pas une erreur, et un echec de pose non plus :
+    // arriver sans nom affiche est un desagrement, refuser l'inscription pour
+    // cela en serait un vrai.
+    if (displayName != null && displayName.isNotEmpty) {
       try {
-        await _client!.setProfileField(
-          _client!.userID!,
-          'displayname',
-          {'displayname': displayName},
-        );
+        await definirNomAffiche(displayName);
       } catch (e) {
         debugPrint('Failed to set display name: $e');
       }
     }
   }
+
 
   // ============================================
   // Durcissement E2E (cross-signing + sauvegarde de clés)
