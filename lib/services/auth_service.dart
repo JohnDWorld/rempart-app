@@ -404,7 +404,7 @@ class AuthService {
   Future<void> signInWithMagicLink({required String email}) async {
     await _client.auth.signInWithOtp(
       email: email,
-      emailRedirectTo: 'fr.rempart_messenger.app://login-callback',
+      emailRedirectTo: 'fr.rempart-messenger.app://login-callback',
     );
   }
 
@@ -412,7 +412,7 @@ class AuthService {
   Future<bool> signInWithOAuth(OAuthProvider provider) {
     return _client.auth.signInWithOAuth(
       provider,
-      redirectTo: 'fr.rempart_messenger.app://login-callback',
+      redirectTo: 'fr.rempart-messenger.app://login-callback',
     );
   }
 
@@ -434,7 +434,7 @@ class AuthService {
   Future<void> resetPassword({required String email}) async {
     await _client.auth.resetPasswordForEmail(
       email,
-      redirectTo: 'fr.rempart_messenger.app://reset-callback',
+      redirectTo: 'fr.rempart-messenger.app://reset-callback',
     );
   }
 

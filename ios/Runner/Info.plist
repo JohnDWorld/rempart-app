@@ -31,10 +31,10 @@
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>CFBundleURLName</key>
-			<string>fr.rempart_messenger.app</string>
+			<string>fr.rempart-messenger.app</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>fr.rempart_messenger.app</string>
+				<string>fr.rempart-messenger.app</string>
 			</array>
 		</dict>
 	</array>

@@ -71,13 +71,13 @@
             <!-- Liens de Supabase : confirmation d'inscription (login-callback)
                  et mot de passe oublie (reset-callback). Sans ce filtre, le lien
                  du courriel n'ouvre rien du tout : Android ne sait pas a qui
-                 remettre une adresse en fr.rempart_messenger.app://, et la
+                 remettre une adresse en fr.rempart-messenger.app://, et la
                  personne reste devant une page d'erreur de son navigateur. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
-                <data android:scheme="fr.rempart_messenger.app"/>
+                <data android:scheme="fr.rempart-messenger.app"/>
             </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.

@@ -103,7 +103,7 @@ Future<void> _demarrer(List<String> args) async {
 
 /// Ouvre l'écran de nouveau mot de passe quand le lien du courriel arrive.
 ///
-/// Supabase se charge seul de lire l'adresse `fr.rempart_messenger.app://`
+/// Supabase se charge seul de lire l'adresse `fr.rempart-messenger.app://`
 /// (ou le fragment de l'URL sur le web) et d'en tirer une session ; il ne
 /// reste qu'à écouter l'événement. Sans cela, le lien ouvrait l'application
 /// sur l'accueil, connecté, sans jamais demander le nouveau mot de passe :
