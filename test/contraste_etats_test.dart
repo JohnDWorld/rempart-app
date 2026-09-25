@@ -56,6 +56,19 @@ void main() {
       }
     });
 
+    test("noms d'expéditeurs lisibles sur une bulle reçue ($nom)", () {
+      // La bulle reçue a la couleur `surface`. En sombre, les encres des
+      // pastilles y tombaient entre 2,13 et 3,36:1 : le nom de qui parle,
+      // dans un groupe, se devinait plus qu'il ne se lisait.
+      for (var i = 0; i < RempartTokens.avatars.length; i++) {
+        expect(
+          contraste(RempartTokens.encreNom(i, luminosite), t.surface),
+          greaterThanOrEqualTo(seuil),
+          reason: 'encre n°$i',
+        );
+      }
+    });
+
     test("textes de succès et d'alerte lisibles ($nom)", () {
       for (final fond in [t.fond, t.surface]) {
         expect(

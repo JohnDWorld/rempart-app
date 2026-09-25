@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -73,7 +74,22 @@ class UserInfoScreen extends ConsumerWidget {
             _Ligne(titre: 'Bio', valeur: profil.bio!),
           if (profil != null)
             _Ligne(titre: "Nom d'utilisateur", valeur: '@${profil.username}'),
-          _Ligne(titre: 'Identifiant Matrix', valeur: mxid),
+          // L'identifiant Matrix se copie, il ne s'affiche pas : une suite
+          // comme `@u_bc4d…:rempart-messenger.fr` ne dit rien à personne. Mais
+          // c'est ce qu'on colle pour inviter cette personne depuis un autre
+          // client Matrix, d'où l'action plutôt que rien.
+          AdaptiveListTile(
+            leading: const Icon(Icons.copy_rounded),
+            title: const Text('Copier son identifiant Matrix'),
+            trailing: const SizedBox.shrink(),
+            onTap: () async {
+              await Clipboard.setData(ClipboardData(text: mxid));
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Identifiant copié')),
+              );
+            },
+          ),
           if (profil != null)
             _Ligne(
               titre: 'Membre depuis',

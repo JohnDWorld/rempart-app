@@ -139,6 +139,27 @@ abstract class RempartTokens {
     (Color(0xFFCCFBF1), Color(0xFF0F766E)),
     (Color(0xFFFFE4E6), Color(0xFFBE123C)),
   ];
+
+  /// Encre du nom d'un expéditeur, au-dessus de sa bulle dans un groupe.
+  ///
+  /// En clair, c'est celle de sa pastille : le nom et l'avatar se répondent.
+  /// En sombre, elle ne tient plus : ces encres sont faites pour le fond pastel
+  /// des pastilles, et sur une bulle reçue sombre elles tombaient entre 2,13 et
+  /// 3,36:1, sous le seuil de 4,5. Même teinte, en plus clair (5,65 à 10,10:1).
+  static Color encreNom(int index, Brightness luminosite) {
+    final i = index % avatars.length;
+    return luminosite == Brightness.dark ? _encresNomSombre[i] : avatars[i].$2;
+  }
+
+  static const _encresNomSombre = <Color>[
+    Color(0xFF60A5FA),
+    Color(0xFF4ADE80),
+    Color(0xFFFBBF24),
+    Color(0xFFF472B6),
+    Color(0xFF818CF8),
+    Color(0xFF2DD4BF),
+    Color(0xFFFB7185),
+  ];
 }
 
 /// Thème de l'application Rempart.

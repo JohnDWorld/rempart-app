@@ -1,7 +1,7 @@
 name: rempart_app
 description: Rempart - Messagerie souveraine avec chiffrement E2E
 publish_to: 'none'
-version: 1.0.0+70
+version: 1.0.0+71
 environment:
   sdk: '>=3.3.0 <4.0.0'
 
@@ -154,7 +154,14 @@ flutter:
 
   # Police embarquee et non telechargee : l'app doit s'afficher sans reseau,
   # ce qui exclut google_fonts et son chargement a la volee. Inter est sous
-  # licence OFL (voir assets/fonts/Inter-LICENSE.txt).
+  # licence OFL (voir assets/fonts/Inter-LICENSE.txt), sans nom reserve.
+  #
+  # RETOUCHEE : les caracteres ❤ ☀ ♥ ⚠ (U+2764, U+2600, U+2665, U+26A0) ont
+  # ete retires de sa table cmap. Inter en a une forme monochrome : Flutter la
+  # prenait et ignorait le selecteur d'emoji, si bien que ❤️ s'affichait en
+  # coeur noir, dans les messages comme dans la barre des reactions. Sans eux,
+  # le texte bascule sur la police emoji du systeme. A refaire en cas de mise a
+  # jour d'Inter (fontTools : retirer ces points de code de chaque table cmap).
   fonts:
     - family: Inter
       fonts:

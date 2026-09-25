@@ -8,6 +8,7 @@ import '../../../core/plateforme.dart';
 import '../../../data/models/matrix_extensions.dart';
 import '../../../data/providers/providers.dart';
 import '../../../data/services/archive_service.dart';
+import '../../widgets/common/user_avatar.dart';
 
 /// Écran affichant les conversations archivées
 class ArchivedConversationsScreen extends ConsumerWidget {
@@ -90,7 +91,7 @@ class ArchivedConversationsScreen extends ConsumerWidget {
             ? CupertinoColors.systemGrey4
             : Theme.of(context).colorScheme.surfaceContainerHighest,
         child: Text(
-          nom.isNotEmpty ? nom[0].toUpperCase() : '?',
+          initialesDe(nom).characters.first,
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.bold,

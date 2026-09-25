@@ -185,7 +185,10 @@ class MessageBubble extends ConsumerWidget {
                               child: Text(
                                 event.senderDisplayName,
                                 style: theme.textTheme.labelMedium?.copyWith(
-                                  color: _couleurExpediteur(event.senderId),
+                                  color: _couleurExpediteur(
+                                    event.senderId,
+                                    theme.brightness,
+                                  ),
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
@@ -329,9 +332,10 @@ class MessageBubble extends ConsumerWidget {
   /// Couleur du nom d'un participant, stable pour un même mxid.
   ///
   /// Reprend l'encre des avatars : le nom et la pastille de la même personne
-  /// se répondent, ce qui aide à suivre une discussion à plusieurs.
-  static Color _couleurExpediteur(String mxid) =>
-      RempartTokens.avatars[mxid.hashCode.abs() % RempartTokens.avatars.length].$2;
+  /// se répondent, ce qui aide à suivre une discussion à plusieurs. En sombre,
+  /// une variante plus claire, sans quoi le nom se perdait dans la bulle.
+  static Color _couleurExpediteur(String mxid, Brightness luminosite) =>
+      RempartTokens.encreNom(mxid.hashCode.abs(), luminosite);
 
   Widget _buildSenderAvatar(BuildContext context) {
     return UserAvatar(

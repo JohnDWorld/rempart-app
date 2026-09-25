@@ -3,6 +3,30 @@ import 'package:matrix/matrix.dart';
 
 import '../../../app/theme.dart';
 
+/// Les deux lettres d'une pastille sans photo.
+///
+/// Par graphème et non par unité UTF-16 : un emoji en occupe deux, et
+/// `mot[0]` n'en gardait que la moitié, qu'aucune police ne sait dessiner.
+/// « Week-end à Biarritz 🌊 » s'affichait ainsi en losange à point
+/// d'interrogation. Seuls comptent les mots qui commencent par une lettre ou un
+/// chiffre : l'emoji final d'un nom de groupe n'est pas une initiale.
+String initialesDe(String nom) {
+  final mots = nom
+      .trim()
+      .split(RegExp(r'\s+'))
+      .where((m) => RegExp(r'^[\p{L}\p{N}]', unicode: true).hasMatch(m))
+      .toList();
+  if (mots.isEmpty) {
+    // Rien d'alphabétique : un nom fait d'emojis garde le premier, entier.
+    return nom.trim().isEmpty ? '?' : nom.trim().characters.first;
+  }
+  if (mots.length >= 2) {
+    return '${mots.first.characters.first}${mots.last.characters.first}'
+        .toUpperCase();
+  }
+  return mots.first.characters.take(2).toString().toUpperCase();
+}
+
 /// Widget avatar utilisateur avec indicateur de statut en ligne
 class UserAvatar extends StatelessWidget {
   const UserAvatar({
@@ -86,7 +110,7 @@ class UserAvatar extends StatelessWidget {
     final backgroundColor =
         deleted ? (nuit ? const Color(0xFF334155) : const Color(0xFFE2E8F0)) : fond;
 
-    final initials = _getInitials(name);
+    final initials = initialesDe(name);
 
     return GestureDetector(
       onTap: onTap,
@@ -173,11 +197,4 @@ class UserAvatar extends StatelessWidget {
     );
   }
 
-  String _getInitials(String name) {
-    final parts = name.trim().split(' ');
-    if (parts.length >= 2) {
-      return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
-    }
-    return name.substring(0, name.length >= 2 ? 2 : 1).toUpperCase();
-  }
 }

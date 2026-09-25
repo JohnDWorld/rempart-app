@@ -17,7 +17,7 @@ class PolitiqueConfidentialiteScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return const DocumentLegal(
       titre: 'Politique de confidentialité',
-      miseAJour: '22 août 2026',
+      miseAJour: '23 septembre 2026',
       sections: [
         SectionLegale('Responsable de traitement', [
           'Jonathan Demory, exerçant sous le nom commercial The Van Codeur, entrepreneur individuel, SIRET 93424185200011, 60 rue Jules Legrand, 56100 Lorient, France.',
@@ -51,6 +51,7 @@ class PolitiqueConfidentialiteScreen extends StatelessWidget {
           "Google (Firebase Cloud Messaging), pour l'acheminement des notifications sur Android. Le service est configuré pour ne transmettre aucun contenu : la notification poussée ne porte qu'un identifiant d'événement, et le texte est ajouté par l'application elle-même, sur votre appareil.",
           'Apple (Apple Push Notification service), même rôle sur iPhone et dans les mêmes conditions.',
           "Vous pouvez remplacer ces deux passerelles par UnifiedPush dans les réglages, et ainsi ne dépendre d'aucune des deux.",
+          "Scaleway SAS (France), pour l'acheminement des courriels de service : confirmation d'adresse et réinitialisation de mot de passe. Ces messages ne portent qu'une adresse électronique et un lien à usage unique. Aucun message, aucune clé et aucune métadonnée de conversation ne transite par ce relais, dont les serveurs sont situés en France.",
           'Les rapports de plantage sont collectés par une instance auto-hébergée sur les serveurs du service : aucun tiers ne les reçoit.',
           "Aucune donnée n'est vendue, louée ni transmise à des fins publicitaires.",
         ]),

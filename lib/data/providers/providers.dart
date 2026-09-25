@@ -158,8 +158,14 @@ final profileStreamProvider =
 
 /// Provider pour la liste des rooms (conversations) - non archivées
 final roomsProvider = Provider<List<matrix.Room>>((ref) {
-  // Écouter le notifier pour forcer le rafraîchissement
-  ref.watch(matrixStateNotifierProvider);
+  // Le notifier couvre les actions locales, le battement du sync tout ce qui
+  // arrive d'ailleurs. Sans ce dernier, une conversation rejointe depuis un
+  // autre appareil (ou créée par un contact) n'apparaissait qu'au retour de
+  // l'app au premier plan, et la liste ne se réordonnait pas quand un message
+  // arrivait plus bas : seul le contenu des lignes suivait.
+  ref
+    ..watch(matrixStateNotifierProvider)
+    ..watch(syncTickProvider);
 
   // Accéder directement au client Matrix (singleton)
   final client = MatrixService.instance.client;
@@ -228,7 +234,9 @@ List<matrix.Room> _dedoublonnerChatsDirects(List<matrix.Room> rooms) {
 
 /// Provider pour la liste des rooms archivées
 final archivedRoomsProvider = Provider<List<matrix.Room>>((ref) {
-  ref.watch(matrixStateNotifierProvider);
+  ref
+    ..watch(matrixStateNotifierProvider)
+    ..watch(syncTickProvider);
 
   final client = MatrixService.instance.client;
   if (client == null) return [];
