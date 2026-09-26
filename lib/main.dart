@@ -13,6 +13,7 @@ import 'app/app.dart';
 import 'app/router.dart';
 import 'core/constants/supabase_constants.dart';
 import 'core/rapports_plantage.dart';
+import 'core/utils/erreur_de_lien.dart';
 import 'data/providers/contenu_notifications.dart';
 import 'data/providers/mode_theme.dart';
 import 'data/providers/taille_texte.dart';
@@ -129,8 +130,11 @@ void _ecouterReinitialisation() {
       if (contexte != null) contexte.go('/reinitialiser');
     },
     onError: (Object erreur) {
+      // Le flux relaie aussi les pannes de la session elle-même (réseau coupé
+      // pendant un renouvellement, session expirée) : absorbées ici comme le
+      // reste, mais sans y voir un lien refusé (voir `erreurDeLien`).
+      if (!erreurDeLien(erreur)) return;
       debugPrint('Lien de courriel refusé par Supabase : $erreur');
-      if (erreur is! AuthException) return;
       // Connecté, on n'a que faire d'un lien de récupération : on ne déplace
       // personne hors de l'écran où il se trouve.
       if (Supabase.instance.client.auth.currentSession != null) return;

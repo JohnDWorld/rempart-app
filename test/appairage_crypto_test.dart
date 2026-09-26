@@ -63,6 +63,33 @@ void main() {
       );
     });
 
+    test("rend la sortie de référence déclarée à l'ANSSI", () {
+      // Troisième sortie de `anssi/sorties-de-reference/`. Si ce test tombe,
+      // l'annexe de la déclaration ne décrit plus l'application : il faut la
+      // régénérer, et le signaler à l'ANSSI si le procédé a changé.
+      final cles = deriverCles(secret);
+      final iv = Uint8List.fromList(
+        [...List<int>.generate(8, (i) => 0xa0 + i), ...List<int>.filled(8, 0)],
+      );
+      const clair = '{"type": "magiclink", "token_hash": '
+          '"reference-anssi-0123456789abcdef", '
+          '"email": "reference@rempart-messenger.fr"}';
+      final chiffre = scellerPourTest(cles, iv, utf8.encode(clair));
+      expect(
+        chiffre.map((o) => o.toRadixString(16).padLeft(2, '0')).join(),
+        'f2e1cafc3297b20f59741fcd49261a1de83ddb9653b2e34ead81fedb9e563b5f'
+        'dda3e10ec02e90c697a51b153475338043549a070e19a978d54f9c831d244999'
+        '550d16ca6437806748a4d49d6ff58e5f338b806526ed25999ce26754c79dad2b'
+        '11c6d1cd64f6168ea1a231ca55f262ca85c8',
+      );
+      final paquet = {
+        'iv': base64.encode(iv),
+        'chiffre': base64.encode(chiffre),
+        'mac': 'lU2jeKpdAqBmi9Hr1r1soA2z4OsRUV8gQgdbC5ifWWo=',
+      };
+      expect(utf8.decode(ouvrirPaquet(secret, paquet)), clair);
+    });
+
     test("l'empreinte est celle que la passerelle attend", () {
       // sha256 des octets 0..31, en hexadécimal.
       expect(
