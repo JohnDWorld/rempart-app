@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/plateforme.dart';
+import '../../../core/utils/regles_mot_de_passe.dart';
 import '../../../data/providers/providers.dart';
 import '../../../services/auth_service.dart';
 import '../../widgets/adaptive/adaptive.dart';
@@ -155,16 +156,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     if (value == null || value.isEmpty) {
       return 'Veuillez entrer un mot de passe';
     }
-    if (value.length < AppConstants.minPasswordLength) {
-      return 'Le mot de passe doit contenir au moins ${AppConstants.minPasswordLength} caractères';
-    }
-    if (!value.contains(RegExp('[0-9]'))) {
-      return 'Le mot de passe doit contenir au moins un chiffre';
-    }
-    if (!value.contains(RegExp('[a-z]'))) {
-      return 'Le mot de passe doit contenir au moins une minuscule';
-    }
-    return null;
+    return problemeMotDePasse(value);
   }
 
   @override
@@ -379,7 +371,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       textInputAction: TextInputAction.next,
                       decoration: InputDecoration(
                         labelText: 'Mot de passe',
-                        helperText: 'Au moins 8 caractères avec un chiffre',
+                        helperText: consigneMotDePasse,
                         prefixIcon: const Icon(Icons.lock_outlined),
                         suffixIcon: IconButton(
                           icon: Icon(

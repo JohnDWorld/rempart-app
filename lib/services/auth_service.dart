@@ -5,13 +5,18 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_vodozemac/flutter_vodozemac.dart' as flutter_vod;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:vodozemac/vodozemac.dart' as vod;
 
 import '../core/plateforme.dart';
+import '../core/utils/derivation_mot_de_passe.dart';
 import '../data/services/bot_gateway_service.dart';
 import '../data/services/matrix_service.dart';
 import '../data/services/push_service.dart';
 import '../data/services/sync_arriere_plan_service.dart';
+import 'connexion_derivee.dart';
 
 /// Provider pour le service d'authentification
 final authServiceProvider = Provider<AuthService>((ref) {
@@ -67,7 +72,14 @@ class AuthService {
   /// fond, hors du chemin critique de l'inscription/connexion (évite le gel de
   /// l'UI). La clé de récupération éventuelle est stockée dans
   /// [_pendingRecoveryKey] et exposée via [awaitPendingRecoveryKey].
-  void _startEncryptionSetup(String supabasePassword, String userId) {
+  ///
+  /// [phraseDuCoffre] ouvre le coffre. Avec [migration], le compte date d'avant
+  /// la dérivation : son coffre est d'abord refermé sur la phrase dérivée.
+  void _startEncryptionSetup(
+    String userId, {
+    required String phraseDuCoffre,
+    _Migration? migration,
+  }) {
     _e2eSetupFuture = () async {
       try {
         final matrixPassword = await _getOrCreateMatrixPassword(userId);
@@ -75,8 +87,15 @@ class AuthService {
         // règle vit côté compte, il faut donc la reposer sur chaque serveur où
         // l'on ouvre une session, pas seulement à la première.
         await MatrixService.instance.activerNotificationsDeReaction();
-        final key = await MatrixService.instance
-            .setupOrUnlockEncryption(supabasePassword, matrixPassword);
+        // Sans chiffrement sur l'appareil, le coffre ne peut pas être
+        // re-chiffré : migrer le seul compte le laisserait fermé par une
+        // phrase que plus rien ne produit. On attend une prochaine connexion.
+        final chiffrementActif =
+            MatrixService.instance.client?.encryptionEnabled ?? false;
+        final key = migration != null && chiffrementActif
+            ? await _migrer(migration, matrixPassword)
+            : await MatrixService.instance
+                .setupOrUnlockEncryption(phraseDuCoffre, matrixPassword);
         _pendingRecoveryKey = key;
         return key;
       } catch (e) {
@@ -84,6 +103,110 @@ class AuthService {
         return null;
       }
     }();
+  }
+
+  /// Fait passer un compte d'avant la dérivation au nouveau schéma.
+  ///
+  /// Même ordre que le changement de mot de passe : le coffre d'abord, le
+  /// compte ensuite. Tant que le compte n'a pas bougé, un échec se rattrape à
+  /// la connexion suivante, qui refera la même migration. Rend la nouvelle clé
+  /// de récupération : re-chiffrer le coffre en crée une, et l'ancienne ne
+  /// vaut plus rien.
+  Future<String?> _migrer(_Migration m, String matrixPassword) async {
+    final matrix = MatrixService.instance;
+    String? cle;
+
+    // 1. Le coffre. Il peut déjà être sur la phrase dérivée, si une tentative
+    // précédente s'est arrêtée entre les deux étapes : on le reconnaît sans y
+    // toucher, puis on se contente de l'ouvrir.
+    if (await matrix.coffreSOuvreAvec(m.secrets.coffre)) {
+      cle = await matrix.setupOrUnlockEncryption(
+        m.secrets.coffre,
+        matrixPassword,
+      );
+    } else {
+      try {
+        cle = await matrix.rechiffrerSsss(
+          m.ancienne,
+          m.secrets.coffre,
+          matrixPassword,
+        );
+      } catch (e) {
+        debugPrint('Mot de passe: coffre non migré, compte laissé tel quel '
+            '($e)');
+        return matrix.setupOrUnlockEncryption(m.ancienne, matrixPassword);
+      }
+    }
+
+    // 2. Le compte.
+    try {
+      await _client.auth.updateUser(
+        UserAttributes(
+          password: m.secrets.connexion,
+          data: {cleVersionMotDePasse: 2},
+        ),
+      );
+    } catch (e) {
+      debugPrint('Mot de passe: compte non migré, retour du coffre ($e)');
+      try {
+        // Le compte connaît toujours l'ancien mot de passe : le coffre y
+        // retourne, et tout est comme avant.
+        return await matrix.rechiffrerSsss(
+          m.secrets.coffre,
+          m.ancienne,
+          matrixPassword,
+        );
+      } catch (e2) {
+        // Le coffre reste sur la phrase dérivée. Elle se retrouve à partir du
+        // même mot de passe, et la prochaine connexion reprendra à l'étape 2.
+        debugPrint('Mot de passe: retour du coffre impossible ($e2)');
+        return cle;
+      }
+    }
+    await _memoriserMigre(m.email);
+    return cle;
+  }
+
+  /// Dérive les secrets de [motDePasse] pour [email], par défaut l'adresse du
+  /// compte connecté.
+  ///
+  /// PBKDF2 passe par vodozemac, natif : le même calcul en Dart pur prendrait
+  /// plusieurs secondes sur un téléphone, et bien plus dans un navigateur.
+  Future<SecretsDuMotDePasse> deriver(
+    String motDePasse, {
+    String? email,
+  }) async {
+    final adresse = email ?? currentUser?.email;
+    if (adresse == null) {
+      throw StateError('Aucune adresse pour dériver le mot de passe');
+    }
+    if (!vod.isInitialized()) await flutter_vod.init();
+    return deriverSecrets(
+      email: adresse,
+      motDePasse: motDePasse,
+      pbkdf2: (m, s, n) =>
+          vod.CryptoUtils.pbkdf2(passphrase: m, salt: s, iterations: n),
+    );
+  }
+
+  ConnexionDerivee<AuthResponse> _connexion(String email) => ConnexionDerivee(
+        seConnecter: (secret) =>
+            _client.auth.signInWithPassword(email: email, password: secret),
+        dejaMigre: () => _dejaMigre(email),
+        memoriserMigre: () => _memoriserMigre(email),
+      );
+
+  static String _cleMigre(String email) =>
+      'mot_de_passe_derive:${normaliserEmail(email)}';
+
+  Future<bool> _dejaMigre(String email) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_cleMigre(email)) ?? false;
+  }
+
+  Future<void> _memoriserMigre(String email) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_cleMigre(email), true);
   }
 
   /// Utilisateur courant
@@ -104,14 +227,21 @@ class AuthService {
     required String password,
     String? displayName,
   }) async {
-    // 1. Inscription Supabase
+    // 1. Inscription Supabase, avec la valeur dérivée : le mot de passe ne
+    // quitte pas l'appareil (voir `derivation_mot_de_passe.dart`).
+    final secrets = await deriver(password, email: email);
     final response = await _client.auth.signUp(
       email: email,
-      password: password,
-      data: displayName != null ? {'display_name': displayName} : null,
+      password: secrets.connexion,
+      data: {
+        if (displayName != null) 'display_name': displayName,
+        cleVersionMotDePasse: 2,
+      },
     );
 
     if (response.user != null) {
+      await _memoriserMigre(email);
+
       // 2. Créer le profil Supabase
       if (displayName != null) {
         await _createUserProfile(response.user!.id, email, displayName);
@@ -123,7 +253,10 @@ class AuthService {
       // est présentée quand le setup est prêt (awaitPendingRecoveryKey).
       try {
         await ensureMatrixSession(response.user!);
-        _startEncryptionSetup(password, response.user!.id);
+        _startEncryptionSetup(
+          response.user!.id,
+          phraseDuCoffre: secrets.coffre,
+        );
       } catch (e) {
         debugPrint(
             "Matrix: session non établie à l'inscription (on continue): $e");
@@ -138,18 +271,27 @@ class AuthService {
     required String email,
     required String password,
   }) async {
-    // 1. Connexion Supabase
-    final response = await _client.auth.signInWithPassword(
-      email: email,
-      password: password,
-    );
+    // 1. Connexion Supabase, avec la valeur dérivée, et le mot de passe tel
+    // quel en repli pour un compte d'avant la dérivation.
+    final secrets = await deriver(password, email: email);
+    final issue = await _connexion(email).connecter(secrets, password);
+    final response = issue.reponse;
 
     // 2. Session Matrix (awaitée) puis durcissement/déverrouillage E2E en tâche
     // de fond (idem inscription : ne doit pas bloquer l'arrivée sur l'accueil).
+    // Un compte ancien est migré au passage : son coffre s'ouvre encore avec
+    // le mot de passe tel quel, qui sert une dernière fois.
     if (response.user != null) {
       try {
         await ensureMatrixSession(response.user!);
-        _startEncryptionSetup(password, response.user!.id);
+        _startEncryptionSetup(
+          response.user!.id,
+          phraseDuCoffre:
+              issue.ancienMotDePasse ? password : secrets.coffre,
+          migration: issue.ancienMotDePasse
+              ? _Migration(email: email, ancienne: password, secrets: secrets)
+              : null,
+        );
       } catch (e) {
         debugPrint(
             'Matrix: session non établie à la connexion (on continue): $e');
@@ -322,32 +464,53 @@ class AuthService {
   /// Username Matrix unique et valide dérivé de l'ID Supabase.
   String _matrixUsername(String userId) => 'u_${userId.replaceAll('-', '')}';
 
-  /// Vérifie que [motDePasse] est bien celui du compte.
+  /// Vérifie [motDePasse] et rend la phrase qui ouvre AUJOURD'HUI le coffre de
+  /// clés, ou null si le mot de passe est faux.
+  ///
+  /// La phrase et non un booléen : pour un compte d'avant la dérivation, c'est
+  /// encore le mot de passe tel quel, et l'appelant qui re-chiffre le coffre
+  /// doit l'ouvrir avec ce qui l'ouvre vraiment.
   ///
   /// Supabase n'offre pas de « vérifier sans changer » : on re-signe donc avec
   /// l'adresse du compte, ce qui échoue si le mot de passe est faux et se
   /// contente de rafraîchir la session sinon. Volontairement `_client.auth`
   /// plutôt que [signIn], pour ne pas relancer toute la mise en place Matrix.
-  Future<bool> verifierMotDePasse(String motDePasse) async {
+  Future<String?> verifierMotDePasse(String motDePasse) async {
     final email = currentUser?.email;
-    if (email == null) return false;
+    if (email == null) return null;
+    final secrets = await deriver(motDePasse, email: email);
     try {
-      await _client.auth.signInWithPassword(
-        email: email,
-        password: motDePasse,
-      );
-      return true;
+      final issue = await _connexion(email).connecter(secrets, motDePasse);
+      return issue.ancienMotDePasse ? motDePasse : secrets.coffre;
     } on AuthException {
-      return false;
+      return null;
     }
+  }
+
+  /// Enregistre un nouveau mot de passe, sous sa forme dérivée.
+  ///
+  /// Le compte est marqué migré au passage : un compte ancien qui change de
+  /// mot de passe, ou le réinitialise, passe ainsi au nouveau schéma.
+  Future<UserResponse> enregistrerMotDePasse(
+    SecretsDuMotDePasse secrets,
+  ) async {
+    final reponse = await _client.auth.updateUser(
+      UserAttributes(
+        password: secrets.connexion,
+        data: {cleVersionMotDePasse: 2},
+      ),
+    );
+    final email = reponse.user?.email ?? currentUser?.email;
+    if (email != null) await _memoriserMigre(email);
+    return reponse;
   }
 
   /// Mot de passe Matrix de l'utilisateur connecté, ou null hors session.
   ///
   /// Aléatoire et jamais montré : il sert aux opérations que le serveur
   /// protège par une ré-authentification, comme fermer une session à distance.
-  /// À ne pas confondre avec le mot de passe Supabase, que l'utilisateur
-  /// choisit et qui sert de phrase secrète SSSS.
+  /// À ne pas confondre avec le mot de passe du compte, que l'utilisateur
+  /// choisit et dont l'appareil dérive la phrase secrète du coffre SSSS.
   Future<String?> motDePasseMatrix() async {
     final userId = currentUser?.id;
     if (userId == null) return null;
@@ -438,13 +601,6 @@ class AuthService {
     );
   }
 
-  /// Mise à jour du mot de passe
-  Future<UserResponse> updatePassword({required String newPassword}) {
-    return _client.auth.updateUser(
-      UserAttributes(password: newPassword),
-    );
-  }
-
   /// Mise à jour du profil
   Future<UserResponse> updateProfile({
     String? email,
@@ -504,4 +660,20 @@ class AuthService {
     }
     await _client.auth.signOut();
   }
+}
+
+/// Ce qu'il faut pour migrer un compte d'avant la dérivation.
+class _Migration {
+  const _Migration({
+    required this.email,
+    required this.ancienne,
+    required this.secrets,
+  });
+
+  final String email;
+
+  /// Le mot de passe tel quel : il ouvre encore le coffre, une dernière fois.
+  final String ancienne;
+
+  final SecretsDuMotDePasse secrets;
 }

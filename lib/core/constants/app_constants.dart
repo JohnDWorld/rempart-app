@@ -84,8 +84,14 @@ abstract class AppConstants {
   /// clignote pas quand tout est déjà chargé.
   static const Duration splashDuration = Duration(milliseconds: 600);
 
-  /// Longueur minimale du mot de passe
-  static const int minPasswordLength = 8;
+  /// Longueur minimale du mot de passe.
+  ///
+  /// 10 et non 8 : le serveur ne voit plus qu'une dérivation lente du mot de
+  /// passe, mais un exploitant malveillant pourrait encore la soumettre à des
+  /// essais en série pour retrouver le coffre de clés. Chaque caractère de plus
+  /// multiplie le nombre d'essais. Ne s'impose qu'à la création et au
+  /// changement, jamais à la connexion.
+  static const int minPasswordLength = 10;
 
   /// Longueur maximale du nom d'affichage
   static const int maxDisplayNameLength = 50;

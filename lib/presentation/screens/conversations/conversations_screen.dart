@@ -131,7 +131,7 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen>
   /// Fait confirmer cette session par un appareil déjà connu, si besoin.
   ///
   /// Le cas est celui d'une connexion par QR code : elle n'a jamais vu le mot
-  /// de passe, qui est aussi la phrase secrète du coffre SSSS. Elle ne peut
+  /// de passe, d'où se dérive la phrase secrète du coffre SSSS. Elle ne peut
   /// donc pas l'ouvrir, reste non signée, et le SDK refuse alors d'aller
   /// chercher la moindre clé dans la sauvegarde en ligne. Résultat sans cette
   /// demande : « The sender has not sent us the session key » sur la totalité

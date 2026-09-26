@@ -458,6 +458,22 @@ class MatrixService {
     );
   }
 
+  /// Le coffre de clés s'ouvre-t-il avec [phrase] ? Ne modifie rien.
+  ///
+  /// Faux aussi s'il n'y a pas de coffre, ou pas de chiffrement sur
+  /// l'appareil : la question est « cette phrase ouvre-t-elle un coffre
+  /// existant », et la réponse n'est oui que dans un seul cas.
+  Future<bool> coffreSOuvreAvec(String phrase) async {
+    final ssss = _client?.encryption?.ssss;
+    if (ssss == null || ssss.defaultKeyId == null) return false;
+    try {
+      await ssss.open().unlock(keyOrPassphrase: phrase, postUnlock: false);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Re-chiffre le SSSS de [ancienne] vers [nouvelle] phrase secrète et rend la
   /// nouvelle clé de récupération.
   ///

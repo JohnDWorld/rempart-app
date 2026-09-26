@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/theme.dart';
+import '../../../core/utils/derivation_mot_de_passe.dart';
+import '../../../core/utils/regles_mot_de_passe.dart';
 import '../../../data/providers/providers.dart';
 import '../../../data/services/reinitialisation_e2e.dart';
 import '../../../services/auth_service.dart';
@@ -59,9 +61,8 @@ class _ReinitialiserMotDePasseScreenState
 
   String? _valider() {
     final nouveau = _nouveauController.text;
-    if (nouveau.length < 8) {
-      return 'Le mot de passe doit faire au moins 8 caractères';
-    }
+    final probleme = problemeMotDePasse(nouveau);
+    if (probleme != null) return probleme;
     if (nouveau != _confirmationController.text) {
       return 'Les deux mots de passe ne correspondent pas';
     }
@@ -110,8 +111,12 @@ class _ReinitialiserMotDePasseScreenState
       _etape = 'Enregistrement du nouveau mot de passe…';
     });
 
+    // Dérivé une seule fois : la valeur pour le serveur, et la phrase qui
+    // refermera le coffre plus bas.
+    final SecretsDuMotDePasse nouveaux;
     try {
-      await auth.updatePassword(newPassword: nouveau);
+      nouveaux = await auth.deriver(nouveau);
+      await auth.enregistrerMotDePasse(nouveaux);
     } catch (e) {
       debugPrint('Réinitialisation : mot de passe refusé ($e)');
       _echouer(
@@ -146,10 +151,13 @@ class _ReinitialiserMotDePasseScreenState
       // qu'à remplir les conversations d'erreurs de déchiffrement.
       if (_sansCle) await ReinitialisationE2e.marquer();
       final cle = _sansCle
-          ? await matrix.reinitialiserChiffrement(nouveau, motDePasseMatrix)
+          ? await matrix.reinitialiserChiffrement(
+              nouveaux.coffre,
+              motDePasseMatrix,
+            )
           : await matrix.rouvrirSsssAvec(
               _cleController.text.trim(),
-              nouveau,
+              nouveaux.coffre,
               motDePasseMatrix,
             );
 
@@ -192,6 +200,7 @@ class _ReinitialiserMotDePasseScreenState
           AdaptiveTextField(
             controller: _nouveauController,
             label: 'Nouveau mot de passe',
+            helperText: consigneMotDePasse,
             obscureText: true,
             enabled: !_enCours,
           ),

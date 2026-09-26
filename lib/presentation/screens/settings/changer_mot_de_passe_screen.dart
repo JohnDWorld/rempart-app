@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme.dart';
-import '../../../core/constants/app_constants.dart';
+import '../../../core/utils/regles_mot_de_passe.dart';
 import '../../../data/providers/providers.dart';
 import '../../../data/services/matrix_service.dart';
 import '../../../services/auth_service.dart';
@@ -11,8 +11,8 @@ import '../../widgets/common/recovery_key_dialog.dart';
 
 /// Changement du mot de passe du compte.
 ///
-/// Ce mot de passe n'en est pas seulement un : il sert aussi de phrase secrète
-/// pour le coffre de clés E2E (SSSS), d'où le déroulé en deux temps.
+/// Ce mot de passe n'en est pas seulement un : l'appareil en dérive aussi la
+/// phrase secrète du coffre de clés E2E (SSSS), d'où le déroulé en deux temps.
 ///
 /// L'ordre est le point important. On re-chiffre le coffre **avant** de changer
 /// le mot de passe Supabase : tant que ce dernier n'a pas bougé, l'ancienne
@@ -96,8 +96,7 @@ class _ChangerMotDePasseScreenState
           AdaptiveTextField(
             controller: _nouveauController,
             label: 'Nouveau mot de passe',
-            helperText: 'Au moins ${AppConstants.minPasswordLength} caractères, '
-                'avec un chiffre et une minuscule',
+            helperText: consigneMotDePasse,
             obscureText: true,
             enabled: !_enCours,
             textInputAction: TextInputAction.next,
@@ -141,16 +140,8 @@ class _ChangerMotDePasseScreenState
   /// Règles alignées sur l'inscription : un mot de passe refusé à la création
   /// ne doit pas devenir acceptable en le changeant.
   String? _valider(String nouveau, String confirmation) {
-    if (nouveau.length < AppConstants.minPasswordLength) {
-      return 'Le nouveau mot de passe doit contenir au moins '
-          '${AppConstants.minPasswordLength} caractères';
-    }
-    if (!nouveau.contains(RegExp('[0-9]'))) {
-      return 'Le nouveau mot de passe doit contenir au moins un chiffre';
-    }
-    if (!nouveau.contains(RegExp('[a-z]'))) {
-      return 'Le nouveau mot de passe doit contenir au moins une minuscule';
-    }
+    final probleme = problemeMotDePasse(nouveau);
+    if (probleme != null) return probleme;
     if (nouveau != confirmation) {
       return 'Les deux saisies ne correspondent pas';
     }
@@ -182,10 +173,14 @@ class _ChangerMotDePasseScreenState
     final matrix = ref.read(matrixServiceProvider);
 
     try {
-      if (!await auth.verifierMotDePasse(actuel)) {
+      // La phrase qui ouvre le coffre aujourd'hui : dérivée du mot de passe,
+      // ou le mot de passe tel quel pour un compte d'avant la dérivation.
+      final ancienne = await auth.verifierMotDePasse(actuel);
+      if (ancienne == null) {
         _echouer('Mot de passe actuel incorrect');
         return;
       }
+      final nouveaux = await auth.deriver(nouveau);
 
       final motDePasseMatrix = await auth.motDePasseMatrix();
       if (motDePasseMatrix == null) {
@@ -199,8 +194,8 @@ class _ChangerMotDePasseScreenState
       String? cleARetenir;
       try {
         cleARetenir = await matrix.rechiffrerSsss(
-          actuel,
-          nouveau,
+          ancienne,
+          nouveaux.coffre,
           motDePasseMatrix,
         );
       } catch (e) {
@@ -216,13 +211,13 @@ class _ChangerMotDePasseScreenState
       // coffre sur l'ancienne phrase pour revenir exactement à l'état initial.
       setState(() => _etape = 'Enregistrement du nouveau mot de passe…');
       try {
-        await auth.updatePassword(newPassword: nouveau);
+        await auth.enregistrerMotDePasse(nouveaux);
       } catch (e) {
         debugPrint('Mot de passe: changement Supabase échoué: $e');
         final cleApresRetour = await _revenirEnArriere(
           matrix,
-          nouveau,
-          actuel,
+          nouveaux.coffre,
+          ancienne,
           motDePasseMatrix,
         );
         if (cleApresRetour != null) {
