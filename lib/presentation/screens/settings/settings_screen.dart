@@ -413,7 +413,7 @@ class SettingsScreen extends ConsumerWidget {
       showDialog<void>(
         context: context,
         barrierDismissible: false,
-        builder: (context) => const Center(child: CircularProgressIndicator()),
+        builder: (context) => const Center(child: CircularProgressIndicator.adaptive()),
       ),
     );
 

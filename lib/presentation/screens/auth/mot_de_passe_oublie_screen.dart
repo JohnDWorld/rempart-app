@@ -14,7 +14,12 @@ import '../../widgets/adaptive/adaptive.dart';
 /// aille chercher sa clé de récupération maintenant, pendant qu'elle lit, que
 /// trois écrans plus loin devant un champ qu'elle ne sait pas remplir.
 class MotDePasseOublieScreen extends ConsumerStatefulWidget {
-  const MotDePasseOublieScreen({super.key});
+  const MotDePasseOublieScreen({this.lienPerime = false, super.key});
+
+  /// Vrai quand on arrive ici parce qu'un lien de réinitialisation a été
+  /// refusé : l'écran commence alors par dire pourquoi, sans quoi la personne
+  /// se retrouve devant la demande qu'elle vient de faire, sans comprendre.
+  final bool lienPerime;
 
   @override
   ConsumerState<MotDePasseOublieScreen> createState() =>
@@ -89,6 +94,17 @@ class _MotDePasseOublieScreenState
               child: const Text('Revenir à la connexion'),
             ),
           ] else ...[
+            if (widget.lienPerime) ...[
+              _Encart(
+                icone: Icons.link_off,
+                couleur: RempartTokens.texteAlerte(theme.brightness),
+                texte: "Ce lien n'est plus valable : un lien de "
+                    "réinitialisation n'a qu'un temps et ne sert qu'une fois. "
+                    'Saisissez votre adresse ci-dessous pour en recevoir un '
+                    'nouveau.',
+              ),
+              const SizedBox(height: RempartTokens.espaceL),
+            ],
             _Encart(
               icone: Icons.key_outlined,
               couleur: theme.colorScheme.primary,
@@ -124,6 +140,16 @@ class _MotDePasseOublieScreenState
               onPressed: _enCours ? null : _envoyer,
               child: Text(_enCours ? 'Envoi…' : 'Recevoir le lien'),
             ),
+            // Arrivé par un lien de courriel, l'écran est seul dans la pile :
+            // pas de retour possible, et qui retrouve finalement son mot de
+            // passe restait coincé devant ce formulaire.
+            if (!Navigator.of(context).canPop()) ...[
+              const SizedBox(height: RempartTokens.espaceS),
+              TextButton(
+                onPressed: () => context.go('/login'),
+                child: const Text('Revenir à la connexion'),
+              ),
+            ],
           ],
         ],
       ),

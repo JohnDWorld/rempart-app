@@ -68,7 +68,7 @@ class _AppareilsScreenState extends ConsumerState<AppareilsScreen> {
         future: _appareils,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(child: CircularProgressIndicator.adaptive());
           }
           if (snapshot.hasError) {
             return _Message(
@@ -286,7 +286,7 @@ class _Appareil extends StatelessWidget {
               ? const SizedBox(
                   width: 20,
                   height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: CircularProgressIndicator.adaptive(strokeWidth: 2),
                 )
               : Row(
                   mainAxisSize: MainAxisSize.min,

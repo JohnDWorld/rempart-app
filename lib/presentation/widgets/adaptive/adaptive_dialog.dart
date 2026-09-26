@@ -198,3 +198,99 @@ Future<T?> feuilleAdaptative<T>({
     ),
   );
 }
+
+/// Dialogue au style de la plateforme : l'alerte d'iOS sur iPhone, le
+/// dialogue Material ailleurs.
+///
+/// Remplace un `AlertDialog` à l'identique : mêmes `title`, `content` et
+/// `actions`, à présenter avec `showAdaptiveDialog` (qui, sur iOS, ne ferme
+/// pas l'alerte d'un toucher à côté, comme le veut le système). Les boutons
+/// passent par [ActionDialogue].
+///
+/// Réservé aux dialogues courts. Un écran riche présenté en dialogue (la clé
+/// de récupération, la vérification d'un appareil) n'entre pas dans les 270
+/// points d'une alerte iOS, et garde le dessin de Rempart.
+class DialogueAdaptatif extends StatelessWidget {
+  const DialogueAdaptatif({
+    this.title,
+    this.content,
+    this.actions = const [],
+    super.key,
+  });
+
+  final Widget? title;
+  final Widget? content;
+  final List<Widget> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!estIOS) {
+      return AlertDialog(title: title, content: content, actions: actions);
+    }
+    final contenu = content;
+    return CupertinoAlertDialog(
+      title: title,
+      // Une alerte Cupertino ne fournit aucun `Material`, dont un champ de
+      // saisie a besoin (« No Material widget found »). On en pose un, mais
+      // un `Material` impose aussi sa typographie, qui remplacerait celle de
+      // l'alerte : on lui rend donc le style et l'alignement qu'il masque,
+      // relus DANS l'alerte grâce au `Builder`.
+      content: contenu == null
+          ? null
+          : Builder(
+              builder: (contexte) {
+                final texte = DefaultTextStyle.of(contexte);
+                return Material(
+                  type: MaterialType.transparency,
+                  textStyle: texte.style,
+                  child: DefaultTextStyle.merge(
+                    textAlign: texte.textAlign,
+                    // L'alerte colle son contenu au titre, ce qui convient à
+                    // un message ; un champ Material, dont le libellé flotte
+                    // au-dessus du cadre, venait alors toucher le titre.
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: contenu,
+                    ),
+                  ),
+                );
+              },
+            ),
+      actions: actions,
+    );
+  }
+}
+
+/// Bouton d'un [DialogueAdaptatif] : action d'alerte iOS sur iPhone, bouton
+/// texte ailleurs, soit exactement ce qu'avaient les dialogues Material.
+class ActionDialogue extends StatelessWidget {
+  const ActionDialogue({
+    required this.onPressed,
+    required this.child,
+    this.destructive = false,
+    this.principale = false,
+    super.key,
+  });
+
+  final VoidCallback? onPressed;
+  final Widget child;
+
+  /// Supprime ou coupe quelque chose sans retour : en rouge sur iOS.
+  final bool destructive;
+
+  /// L'action attendue : en gras sur iOS.
+  final bool principale;
+
+  @override
+  Widget build(BuildContext context) {
+    if (estIOS) {
+      return CupertinoDialogAction(
+        onPressed: onPressed,
+        isDestructiveAction: destructive,
+        isDefaultAction: principale,
+        child: child,
+      );
+    }
+    return TextButton(onPressed: onPressed, child: child);
+  }
+}

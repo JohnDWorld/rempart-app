@@ -58,9 +58,9 @@ class _BotDirectoryScreenState extends ConsumerState<BotDirectoryScreen> {
 
   Future<void> _reportBot(DirectoryBot bot) async {
     final controller = TextEditingController();
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showAdaptiveDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => DialogueAdaptatif(
         title: Text('Signaler ${bot.name.isEmpty ? "ce bot" : bot.name}'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -83,11 +83,12 @@ class _BotDirectoryScreenState extends ConsumerState<BotDirectoryScreen> {
           ],
         ),
         actions: [
-          TextButton(
+          ActionDialogue(
             onPressed: () => Navigator.pop(context, false),
             child: const Text('Annuler'),
           ),
-          TextButton(
+          ActionDialogue(
+            principale: true,
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Signaler'),
           ),
@@ -199,7 +200,7 @@ class _BotDirectoryScreenState extends ConsumerState<BotDirectoryScreen> {
                     future: _future,
                     builder: (context, snapshot) {
                       if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Center(child: CircularProgressIndicator());
+                        return const Center(child: CircularProgressIndicator.adaptive());
                       }
                       if (snapshot.hasError) {
                         return _ErrorView(
@@ -232,7 +233,7 @@ class _BotDirectoryScreenState extends ConsumerState<BotDirectoryScreen> {
           if (_starting)
             const ColoredBox(
               color: Color(0x66000000),
-              child: Center(child: CircularProgressIndicator()),
+              child: Center(child: CircularProgressIndicator.adaptive()),
             ),
         ],
       ),
@@ -258,7 +259,10 @@ class _DirectoryTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       child: ListTile(
         onTap: onTap,
-        isThreeLine: bot.description.isNotEmpty,
+        // La carte suit son texte : réserver trois lignes dès qu'il y a une
+        // description laissait un vide sous celles qui n'en font qu'une.
+        // Courte, l'avatar se centre ; haute, il se cale près du nom.
+        titleAlignment: ListTileTitleAlignment.titleHeight,
         leading: CircleAvatar(
           backgroundColor: theme.colorScheme.primaryContainer,
           child:
@@ -273,9 +277,7 @@ class _DirectoryTile extends StatelessWidget {
             color: theme.colorScheme.outline,
           ),
         ),
-        trailing: PopupMenuButton<String>(
-          icon: Icon(Icons.adaptive.more),
-          tooltip: 'Actions',
+        trailing: MenuAdaptatif<String>(
           onSelected: (value) {
             if (value == 'chat') {
               onTap?.call();
@@ -283,22 +285,16 @@ class _DirectoryTile extends StatelessWidget {
               onReport?.call();
             }
           },
-          itemBuilder: (context) => [
-            const PopupMenuItem<String>(
-              value: 'chat',
-              child: ListTile(
-                leading: Icon(Icons.chat_bubble_outline),
-                title: Text('Discuter'),
-                contentPadding: EdgeInsets.zero,
-              ),
+          entrees: const [
+            EntreeMenu(
+              valeur: 'chat',
+              libelle: 'Discuter',
+              icone: Icons.chat_bubble_outline,
             ),
-            const PopupMenuItem<String>(
-              value: 'report',
-              child: ListTile(
-                leading: Icon(Icons.flag_outlined),
-                title: Text('Signaler'),
-                contentPadding: EdgeInsets.zero,
-              ),
+            EntreeMenu(
+              valeur: 'report',
+              libelle: 'Signaler',
+              icone: Icons.flag_outlined,
             ),
           ],
         ),

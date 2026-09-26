@@ -1015,7 +1015,20 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   /// Rangée de symboles à poser d'un appui, en tête du menu.
+  ///
+  /// Le `Material` transparent ne dessine rien : il fournit aux `InkWell` le
+  /// support qu'ils exigent. Sur iOS la rangée est posée dans une feuille
+  /// Cupertino, qui n'en a pas, et sans lui chaque symbole levait « No
+  /// Material widget found » : la rangée s'affichait en bloc d'erreur rouge,
+  /// alors qu'elle est la façon de répondre d'un appui à un agent.
   Widget _rangeeReactions(matrix.Event event) {
+    return Material(
+      type: MaterialType.transparency,
+      child: _rangeeReactionsContenu(event),
+    );
+  }
+
+  Widget _rangeeReactionsContenu(matrix.Event event) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: Row(
@@ -1160,9 +1173,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   /// les messages peut transmettre, et cela suffit pour agir sur un compte.
   Future<void> _signalerMessage(matrix.Event event) async {
     final controleur = TextEditingController();
-    final motif = await showDialog<String>(
+    final motif = await showAdaptiveDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => DialogueAdaptatif(
         title: const Text('Signaler ce message'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1184,11 +1197,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ],
         ),
         actions: [
-          TextButton(
+          ActionDialogue(
             onPressed: () => Navigator.pop(context),
             child: const Text('Annuler'),
           ),
-          TextButton(
+          ActionDialogue(
+            principale: true,
             onPressed: () => Navigator.pop(context, controleur.text.trim()),
             child: const Text('Signaler'),
           ),
@@ -1295,7 +1309,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         ),
       );
     } else {
-      showDialog(
+      showAdaptiveDialog(
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Modifier le message'),
@@ -1372,7 +1386,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         ),
       );
     } else {
-      showDialog(
+      showAdaptiveDialog(
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Supprimer le message'),
@@ -1504,7 +1518,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     // Liste des messages
                     Expanded(
                       child: _timeline == null
-                          ? const Center(child: CircularProgressIndicator())
+                          ? const Center(child: CircularProgressIndicator.adaptive())
                           : events.isEmpty
                               ? (_isSearching
                                   ? _buildAucunResultat(context)
@@ -1704,7 +1718,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             children: [
               _Pastille(
                 child: IconButton(
-                  icon: Icon(Icons.adaptive.arrow_back),
+                  icon: Icon(iconeRetour),
                   tooltip: 'Retour',
                   onPressed: () {
                     // En recherche, le retour ferme d'abord la recherche.
@@ -1771,7 +1785,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 ),
                 const SizedBox(width: RempartTokens.espaceS),
                 _Pastille(
-                  child: PopupMenuButton<String>(
+                  child: MenuAdaptatif<String>(
+                    tooltip: MaterialLocalizations.of(context).showMenuTooltip,
                     onSelected: (value) {
                       if (value == 'mute') {
                         unawaited(_basculerSourdine(room));
@@ -1779,22 +1794,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         _ouvrirFiche(room);
                       }
                     },
-                    itemBuilder: (context) => [
-                      PopupMenuItem(
-                        value: 'mute',
-                        child: Text(
-                          _estEnSourdine(room)
-                              ? 'Réactiver les notifications'
-                              : 'Mettre en sourdine',
-                        ),
+                    entrees: [
+                      EntreeMenu(
+                        valeur: 'mute',
+                        libelle: _estEnSourdine(room)
+                            ? 'Réactiver les notifications'
+                            : 'Mettre en sourdine',
                       ),
-                      PopupMenuItem(
-                        value: 'info',
-                        child: Text(
-                          room.otherUserMxid != null
-                              ? 'Infos du contact'
-                              : 'Infos du groupe',
-                        ),
+                      EntreeMenu(
+                        valeur: 'info',
+                        libelle: room.otherUserMxid != null
+                            ? 'Infos du contact'
+                            : 'Infos du groupe',
                       ),
                     ],
                   ),
@@ -1848,7 +1859,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           const SizedBox(
             width: 16,
             height: 16,
-            child: CircularProgressIndicator(strokeWidth: 2),
+            child: CircularProgressIndicator.adaptive(strokeWidth: 2),
           ),
           const SizedBox(width: 12),
           Text(
@@ -1961,7 +1972,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         : ref.watch(contactProfileProvider(contactMxid)).value;
     final title = contact?.name ?? room.displayName;
     final contactSupprime = contact?.deleted ?? false;
-    final brightness = MediaQuery.platformBrightnessOf(context);
+    final brightness = Theme.of(context).brightness;
     final isDark = brightness == Brightness.dark;
 
     // Toucher l'en-tête ouvre la fiche : celle du contact pour un
@@ -2116,7 +2127,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   Widget _buildEmptyState(BuildContext context) {
     final isIOS = estIOS;
-    final brightness = MediaQuery.platformBrightnessOf(context);
+    final brightness = Theme.of(context).brightness;
     final isDark = brightness == Brightness.dark;
 
     return Center(
@@ -2298,7 +2309,7 @@ class _FeuilleLegendeState extends State<_FeuilleLegende> {
               ],
               if (_qualiteEnJeu) ...[
                 const SizedBox(height: 4),
-                SwitchListTile(
+                SwitchListTile.adaptive(
                   contentPadding: EdgeInsets.zero,
                   value: _hd,
                   onChanged: (v) => setState(() => _hd = v),

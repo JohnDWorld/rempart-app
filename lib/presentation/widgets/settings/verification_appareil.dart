@@ -189,7 +189,7 @@ class _DialogueVerificationState extends State<_DialogueVerification> {
               SizedBox(
                 width: 20,
                 height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
+                child: CircularProgressIndicator.adaptive(strokeWidth: 2),
               ),
               SizedBox(width: 16),
               Flexible(child: Text('Transmission des clés...')),
@@ -280,7 +280,7 @@ class _DialogueVerificationState extends State<_DialogueVerification> {
               SizedBox(
                 width: 18,
                 height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
+                child: CircularProgressIndicator.adaptive(strokeWidth: 2),
               ),
               SizedBox(width: 12),
               Expanded(

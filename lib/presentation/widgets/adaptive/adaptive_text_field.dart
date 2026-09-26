@@ -1,6 +1,7 @@
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import '../../../app/theme.dart';
 import '../../../core/plateforme.dart';
 
 /// Champ de texte adaptatif : CupertinoTextField sur iOS, TextField sur Android
@@ -53,8 +54,17 @@ class AdaptiveTextField extends StatelessWidget {
   }
 
   Widget _buildCupertinoTextField(BuildContext context) {
-    final brightness = MediaQuery.platformBrightnessOf(context);
-    final isDark = brightness == Brightness.dark;
+    // Couleurs du thème de l'APPLICATION, aux jetons de la charte. Elles
+    // suivaient `MediaQuery.platformBrightnessOf`, c'est-à-dire l'apparence
+    // du système : l'utilisateur qui choisissait « Sombre » sur un téléphone
+    // réglé en clair écrivait en noir sur un fond sombre, dans un champ gris
+    // d'iOS au lieu de la surface de Rempart.
+    final theme = Theme.of(context);
+    final couleurs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final secondaire = isDark
+        ? RempartTokens.texteSecondaireSombre
+        : RempartTokens.texteSecondaireClair;
 
     final field = CupertinoTextField(
       controller: controller,
@@ -83,16 +93,12 @@ class AdaptiveTextField extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       decoration: BoxDecoration(
         color: isDark
-            ? CupertinoColors.systemGrey6.darkColor
-            : CupertinoColors.systemGrey6,
-        borderRadius: BorderRadius.circular(10),
+            ? RempartTokens.surfaceEnfonceeSombre
+            : RempartTokens.surfaceEnfonceeClaire,
+        borderRadius: BorderRadius.circular(RempartTokens.rayonChamp),
       ),
-      style: TextStyle(
-        color: isDark ? CupertinoColors.white : CupertinoColors.black,
-      ),
-      placeholderStyle: TextStyle(
-        color: isDark ? CupertinoColors.systemGrey : CupertinoColors.systemGrey,
-      ),
+      style: TextStyle(color: couleurs.onSurface),
+      placeholderStyle: TextStyle(color: secondaire),
     );
 
     // Ajouter le label et les messages d'aide/erreur si nécessaires
@@ -106,9 +112,7 @@ class AdaptiveTextField extends StatelessWidget {
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
-                color: isDark
-                    ? CupertinoColors.systemGrey
-                    : CupertinoColors.systemGrey,
+                color: secondaire,
               ),
             ),
             const SizedBox(height: 6),
@@ -118,9 +122,9 @@ class AdaptiveTextField extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               errorText!,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
-                color: CupertinoColors.systemRed,
+                color: couleurs.error,
               ),
             ),
           ] else if (helperText != null) ...[
@@ -129,9 +133,7 @@ class AdaptiveTextField extends StatelessWidget {
               helperText!,
               style: TextStyle(
                 fontSize: 12,
-                color: isDark
-                    ? CupertinoColors.systemGrey
-                    : CupertinoColors.systemGrey,
+                color: secondaire,
               ),
             ),
           ],

@@ -775,7 +775,7 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen>
 
   Widget _buildNotConnectedState(BuildContext context) {
     final isIOS = estIOS;
-    final brightness = MediaQuery.platformBrightnessOf(context);
+    final brightness = Theme.of(context).brightness;
     final isDark = brightness == Brightness.dark;
 
     return Center(
@@ -847,7 +847,7 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen>
             if (_isConnecting && isIOS)
               const CupertinoActivityIndicator()
             else if (_isConnecting)
-              const CircularProgressIndicator()
+              const CircularProgressIndicator.adaptive()
             else if (isIOS)
               CupertinoButton.filled(
                 onPressed: _connectToMatrix,
@@ -867,7 +867,7 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen>
 
   Widget _buildEmptyState(BuildContext context) {
     final isIOS = estIOS;
-    final brightness = MediaQuery.platformBrightnessOf(context);
+    final brightness = Theme.of(context).brightness;
     final isDark = brightness == Brightness.dark;
 
     return Center(

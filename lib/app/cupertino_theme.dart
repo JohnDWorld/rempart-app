@@ -29,7 +29,14 @@ abstract class RempartCupertinoTheme {
     return CupertinoThemeData(
       brightness: luminosite,
       primaryColor: sombre ? RempartTokens.bleuClair : RempartTokens.bleu,
-      primaryContrastingColor: CupertinoColors.white,
+      // Le texte posé sur l'accent : celui du thème Material, pour une seule
+      // source. Il était blanc dans les deux modes, or l'accent s'éclaircit
+      // en sombre, et un bouton plein tombait alors à 2,5:1 de contraste (il
+      // en faut 4,5). Le bleu très sombre de Material y tient 7,4:1.
+      primaryContrastingColor:
+          (sombre ? RempartTheme.dark : RempartTheme.light)
+              .colorScheme
+              .onPrimary,
       scaffoldBackgroundColor:
           sombre ? RempartTokens.fondSombre : RempartTokens.fondClair,
       barBackgroundColor:

@@ -225,7 +225,7 @@ class _NewGroupScreenState extends ConsumerState<NewGroupScreen> {
           if (_creation)
             const ColoredBox(
               color: Color(0x66000000),
-              child: Center(child: CircularProgressIndicator()),
+              child: Center(child: CircularProgressIndicator.adaptive()),
             ),
         ],
       ),
@@ -289,7 +289,7 @@ class _NewGroupScreenState extends ConsumerState<NewGroupScreen> {
   }
 
   Widget _tuileBot(({String mxid, String nom, String detail}) bot) {
-    return CheckboxListTile(
+    return CheckboxListTile.adaptive(
       value: _botsChoisis.containsKey(bot.mxid),
       onChanged: (_) => _basculerBot(bot),
       secondary: const CircleAvatar(child: Icon(Icons.smart_toy_outlined)),
@@ -316,7 +316,7 @@ class _NewGroupScreenState extends ConsumerState<NewGroupScreen> {
         final bots = _botsTrouves(snapshot.data ?? const <UserBot>[]);
 
         return resultats.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
+          loading: () => const Center(child: CircularProgressIndicator.adaptive()),
           error: (e, _) => _buildMessage(
             Icons.error_outline,
             'Recherche impossible',
@@ -350,7 +350,7 @@ class _NewGroupScreenState extends ConsumerState<NewGroupScreen> {
                 if (bots.isNotEmpty && profils.isNotEmpty)
                   _entete('Personnes', theme),
                 for (final profile in profils)
-                  CheckboxListTile(
+                  CheckboxListTile.adaptive(
                     value: _selection.containsKey(profile.id),
                     onChanged: (_) => _basculer(profile),
                     secondary: UserAvatar(

@@ -44,6 +44,12 @@ final cleNavigateurRacine = GlobalKey<NavigatorState>();
 /// encore été atteint. Posé par l'écoute montée dans `main`.
 bool reinitialisationEnAttente = false;
 
+/// Vrai quand Supabase vient de REFUSER un lien de courriel (périmé, ou déjà
+/// servi) et que l'écran qui l'explique n'a pas encore été atteint. Même
+/// relais que [reinitialisationEnAttente], pour la même raison : le lien peut
+/// réveiller l'application avant que le routeur existe.
+bool lienPerimeEnAttente = false;
+
 /// Provider pour le router
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
@@ -77,6 +83,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       // drapeau, et la première navigation venue (celle de l'écran de
       // démarrage) atterrit ici.
       if (reinitialisationEnAttente) return '/reinitialiser';
+      // Seul le lien « mot de passe oublié » arrive par courriel : un lien
+      // refusé ramène donc à sa demande, avec l'explication. Connecté, on n'a
+      // que faire d'un lien de récupération, et la suite mène à l'accueil.
+      if (lienPerimeEnAttente) {
+        lienPerimeEnAttente = false;
+        if (!isLoggedIn) return '/mot-de-passe-oublie?lien=perime';
+      }
       final isSplash = state.matchedLocation == '/';
 
       // Splash screen - pas de redirection
@@ -112,7 +125,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/mot-de-passe-oublie',
         name: 'mot-de-passe-oublie',
-        builder: (context, state) => const MotDePasseOublieScreen(),
+        builder: (context, state) => MotDePasseOublieScreen(
+          lienPerime: state.uri.queryParameters['lien'] == 'perime',
+        ),
       ),
       GoRoute(
         path: '/reinitialiser',

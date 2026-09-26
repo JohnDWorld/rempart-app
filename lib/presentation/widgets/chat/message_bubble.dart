@@ -578,7 +578,7 @@ class _ImageJointeState extends State<_ImageJointe> {
           color: Theme.of(context).colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(8),
         ),
-        child: const Center(child: CircularProgressIndicator()),
+        child: const Center(child: CircularProgressIndicator.adaptive()),
       );
     }
 
@@ -1114,9 +1114,9 @@ class _VocalJointState extends ConsumerState<_VocalJoint> {
                     ? SizedBox(
                         width: 20,
                         height: 20,
-                        child: CircularProgressIndicator(
+                        child: CircularProgressIndicator.adaptive(
                           strokeWidth: 2,
-                          color: couleur,
+                          valueColor: AlwaysStoppedAnimation<Color>(couleur),
                         ),
                       )
                     : Icon(

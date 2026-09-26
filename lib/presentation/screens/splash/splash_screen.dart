@@ -172,7 +172,7 @@ class _SplashScreenState extends State<SplashScreen>
                     ? const CupertinoActivityIndicator(
                         color: Colors.white,
                       )
-                    : CircularProgressIndicator(
+                    : CircularProgressIndicator.adaptive(
                         strokeWidth: 2,
                         valueColor: AlwaysStoppedAnimation<Color>(
                           Colors.white.withValues(alpha: 0.8),

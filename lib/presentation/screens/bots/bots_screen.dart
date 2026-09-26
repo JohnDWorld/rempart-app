@@ -91,7 +91,7 @@ class _BotsScreenState extends ConsumerState<BotsScreen> {
           if (_isLoading)
             const ColoredBox(
               color: Color(0x66000000),
-              child: Center(child: CircularProgressIndicator()),
+              child: Center(child: CircularProgressIndicator.adaptive()),
             ),
         ],
       ),

@@ -93,7 +93,7 @@ class _NewChatScreenState extends ConsumerState<NewChatScreen> {
     String searchQuery,
     AsyncValue<List<Profile>> searchResults,
   ) {
-    final brightness = MediaQuery.platformBrightnessOf(context);
+    final brightness = Theme.of(context).brightness;
     final isDark = brightness == Brightness.dark;
 
     return CupertinoPageScaffold(
@@ -282,7 +282,7 @@ class _NewChatScreenState extends ConsumerState<NewChatScreen> {
           // Résultats de recherche
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(child: CircularProgressIndicator.adaptive())
                 : searchResults.when(
                     data: (profiles) {
                       if (searchQuery.isEmpty) {
@@ -302,7 +302,7 @@ class _NewChatScreenState extends ConsumerState<NewChatScreen> {
                       );
                     },
                     loading: () => const Center(
-                      child: CircularProgressIndicator(),
+                      child: CircularProgressIndicator.adaptive(),
                     ),
                     error: (error, _) => Center(
                       child: Text('Erreur: $error'),
@@ -344,7 +344,7 @@ class _NewChatScreenState extends ConsumerState<NewChatScreen> {
 
   Widget _buildEmptySearch(BuildContext context) {
     final isIOS = estIOS;
-    final brightness = MediaQuery.platformBrightnessOf(context);
+    final brightness = Theme.of(context).brightness;
     final isDark = brightness == Brightness.dark;
 
     return Center(
@@ -386,7 +386,7 @@ class _NewChatScreenState extends ConsumerState<NewChatScreen> {
 
   Widget _buildNoResults(BuildContext context) {
     final isIOS = estIOS;
-    final brightness = MediaQuery.platformBrightnessOf(context);
+    final brightness = Theme.of(context).brightness;
     final isDark = brightness == Brightness.dark;
 
     return Center(

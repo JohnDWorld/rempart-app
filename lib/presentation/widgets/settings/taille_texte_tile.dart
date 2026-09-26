@@ -62,62 +62,69 @@ class _FeuilleState extends State<_Feuille> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final base = theme.textTheme.bodyLarge!;
+    // Défilable : la feuille est bornée à une fraction de l'écran, et sur un
+    // iPhone, plus court en points qu'un Android courant, le contenu la
+    // dépassait (d'un rien, mais Flutter le signale en erreur).
     return SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Text('Taille du texte', style: theme.textTheme.titleMedium),
-          ),
-          // Une vraie bulle plutôt qu'une ligne de texte : c'est la largeur
-          // disponible qui fait qu'une taille passe ou non.
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: Container(
-                constraints: BoxConstraints(
-                  maxWidth: MediaQuery.of(context).size.width * 0.78,
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primary,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Text(
-                  'Voilà à quoi ressembleront tes messages.',
-                  style: base.copyWith(
-                    fontSize: (base.fontSize ?? 15.5) * _choix.facteur,
-                    color: theme.colorScheme.onPrimary,
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child:
+                  Text('Taille du texte', style: theme.textTheme.titleMedium),
+            ),
+            // Une vraie bulle plutôt qu'une ligne de texte : c'est la largeur
+            // disponible qui fait qu'une taille passe ou non.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Container(
+                  constraints: BoxConstraints(
+                    maxWidth: MediaQuery.of(context).size.width * 0.78,
+                  ),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Text(
+                    'Voilà à quoi ressembleront tes messages.',
+                    style: base.copyWith(
+                      fontSize: (base.fontSize ?? 15.5) * _choix.facteur,
+                      color: theme.colorScheme.onPrimary,
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-          RadioGroup<TailleTexte>(
-            groupValue: _choix,
-            onChanged: (v) => setState(() => _choix = v!),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (final taille in TailleTexte.values)
-                  RadioListTile<TailleTexte>(
-                    value: taille,
-                    title: Text(taille.libelle),
-                  ),
-              ],
+            RadioGroup<TailleTexte>(
+              groupValue: _choix,
+              onChanged: (v) => setState(() => _choix = v!),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final taille in TailleTexte.values)
+                    RadioListTile<TailleTexte>(
+                      value: taille,
+                      title: Text(taille.libelle),
+                    ),
+                ],
+              ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            child: FilledButton(
-              onPressed: () => Navigator.pop(context, _choix),
-              child: const Text('Appliquer'),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              child: FilledButton(
+                onPressed: () => Navigator.pop(context, _choix),
+                child: const Text('Appliquer'),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

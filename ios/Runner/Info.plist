@@ -9,9 +9,9 @@
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Pour enregistrer dans vos photos une image ou une vidéo reçue dans une conversation.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Pour scanner le code de vérification affiché par un autre de vos appareils. Rempart n'utilise la caméra qu'à ce moment-là.</string>
+	<string>Pour prendre une photo ou filmer une vidéo à envoyer, choisir votre photo de profil ou celle d'un groupe, et scanner le code affiché par un autre de vos appareils. Rempart n'utilise la caméra que lorsque vous le demandez.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Pour enregistrer un message vocal. Rempart n'utilise le micro que pendant que vous enregistrez.</string>
+	<string>Pour enregistrer un message vocal, et le son des vidéos que vous filmez. Rempart n'utilise le micro que pendant l'enregistrement.</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
@@ -25,6 +25,8 @@
 	<!-- Meme role que l'intent-filter du manifeste Android : c'est ce qui fait
 	     qu'un lien de Supabase (inscription, mot de passe oublie) ouvre
 	     l'application au lieu d'echouer dans le navigateur. -->
+	<key>FlutterDeepLinkingEnabled</key>
+	<false/>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

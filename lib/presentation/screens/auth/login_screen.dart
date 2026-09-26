@@ -356,7 +356,7 @@ class _VoileConnexion extends StatelessWidget {
                 const SizedBox(
                   width: 44,
                   height: 44,
-                  child: CircularProgressIndicator(color: Colors.white),
+                  child: CircularProgressIndicator.adaptive(valueColor: AlwaysStoppedAnimation<Color>(Colors.white)),
                 ),
               const SizedBox(height: 20),
               const Text(

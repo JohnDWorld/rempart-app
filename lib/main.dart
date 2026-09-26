@@ -112,14 +112,32 @@ Future<void> _demarrer(List<String> args) async {
 /// L'écoute est montée ici, hors de l'arbre des écrans, parce que l'événement
 /// peut survenir avant que le premier écran existe. Le routeur porte alors le
 /// relais (`reinitialisationEnAttente`).
+///
+/// Un lien refusé arrive par le même flux, mais en ERREUR : un lien de
+/// réinitialisation ne vaut qu'un temps et ne sert qu'une fois. Sans
+/// `onError`, l'application s'ouvrait sans un mot, et l'exception, que
+/// personne ne rattrapait, partait comme un plantage dans les rapports.
 void _ecouterReinitialisation() {
-  Supabase.instance.client.auth.onAuthStateChange.listen((etat) {
-    if (etat.event != AuthChangeEvent.passwordRecovery) return;
-    reinitialisationEnAttente = true;
-    final contexte = cleNavigateurRacine.currentContext;
-    // Le contexte vient d'être relu à la clé du Navigator, il ne peut pas
-    // être périmé : c'est celui qui existe à cet instant, ou rien.
-    // ignore: use_build_context_synchronously
-    if (contexte != null) contexte.go('/reinitialiser');
-  });
+  Supabase.instance.client.auth.onAuthStateChange.listen(
+    (etat) {
+      if (etat.event != AuthChangeEvent.passwordRecovery) return;
+      reinitialisationEnAttente = true;
+      final contexte = cleNavigateurRacine.currentContext;
+      // Le contexte vient d'être relu à la clé du Navigator, il ne peut pas
+      // être périmé : c'est celui qui existe à cet instant, ou rien.
+      // ignore: use_build_context_synchronously
+      if (contexte != null) contexte.go('/reinitialiser');
+    },
+    onError: (Object erreur) {
+      debugPrint('Lien de courriel refusé par Supabase : $erreur');
+      if (erreur is! AuthException) return;
+      // Connecté, on n'a que faire d'un lien de récupération : on ne déplace
+      // personne hors de l'écran où il se trouve.
+      if (Supabase.instance.client.auth.currentSession != null) return;
+      lienPerimeEnAttente = true;
+      final contexte = cleNavigateurRacine.currentContext;
+      // ignore: use_build_context_synchronously
+      if (contexte != null) contexte.go('/mot-de-passe-oublie');
+    },
+  );
 }

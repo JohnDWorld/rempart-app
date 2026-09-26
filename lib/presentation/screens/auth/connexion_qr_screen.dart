@@ -95,7 +95,7 @@ class _ConnexionQrScreenState extends State<ConnexionQrScreen> {
                 else if (_appairage == null)
                   const Padding(
                     padding: EdgeInsets.all(40),
-                    child: CircularProgressIndicator(),
+                    child: CircularProgressIndicator.adaptive(),
                   )
                 else ...[
                   Container(
@@ -116,7 +116,7 @@ class _ConnexionQrScreenState extends State<ConnexionQrScreen> {
                       const SizedBox(
                         width: 14,
                         height: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: CircularProgressIndicator.adaptive(strokeWidth: 2),
                       ),
                       const SizedBox(width: 10),
                       Text(

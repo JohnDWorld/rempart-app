@@ -2,6 +2,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../core/plateforme.dart';
+
 /// Jetons de style de Rempart : couleurs, ombres, rayons, espacements.
 ///
 /// Un seul endroit décide de l'apparence. Les écrans lisent ces jetons (ou le
@@ -253,13 +255,20 @@ abstract class RempartTheme {
       canvasColor: fond,
       fontFamily: police,
       textTheme: typo,
-      splashFactory: InkSparkle.splashFactory,
+      // iOS ne connaît pas l'onde de Material : un toucher y assombrit
+      // brièvement ce qu'on presse, sans cercle qui s'étend. L'étincelle
+      // d'Android 12, sur un iPhone, signalait d'emblée une application
+      // venue d'ailleurs.
+      splashFactory:
+          estIOS ? NoSplash.splashFactory : InkSparkle.splashFactory,
 
       appBarTheme: AppBarTheme(
         backgroundColor: fond,
         foregroundColor: texte,
         surfaceTintColor: Colors.transparent,
-        centerTitle: false,
+        // Centré sur iOS, où c'est la règle de toute barre de navigation ;
+        // à gauche ailleurs, comme le veut Material.
+        centerTitle: estIOS,
         titleSpacing: RempartTokens.espaceL,
         elevation: 0,
         // L'ombre n'apparaît qu'au défilement : la barre semble alors se

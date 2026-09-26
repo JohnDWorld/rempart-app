@@ -230,7 +230,7 @@ class ArchivedConversationsScreen extends ConsumerWidget {
   }
 
   Widget _buildEmptyState(BuildContext context, {required bool isIOS}) {
-    final brightness = MediaQuery.platformBrightnessOf(context);
+    final brightness = Theme.of(context).brightness;
     final isDark = brightness == Brightness.dark;
 
     return Center(

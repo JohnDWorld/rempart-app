@@ -81,9 +81,9 @@ class _ModifierProfilScreenState extends ConsumerState<ModifierProfilScreen> {
                           ? SizedBox(
                               width: 18,
                               height: 18,
-                              child: CircularProgressIndicator(
+                              child: CircularProgressIndicator.adaptive(
                                 strokeWidth: 2,
-                                color: theme.colorScheme.onPrimary,
+                                valueColor: AlwaysStoppedAnimation<Color>(theme.colorScheme.onPrimary),
                               ),
                             )
                           : Icon(

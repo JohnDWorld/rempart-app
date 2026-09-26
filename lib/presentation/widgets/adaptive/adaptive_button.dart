@@ -32,7 +32,9 @@ class AdaptiveButton extends StatelessWidget {
       child: CupertinoButton.filled(
         onPressed: isLoading ? null : onPressed,
         child: isLoading
-            ? const CupertinoActivityIndicator(color: CupertinoColors.white)
+            ? CupertinoActivityIndicator(
+                color: CupertinoTheme.of(context).primaryContrastingColor,
+              )
             : child,
       ),
     );
@@ -53,7 +55,7 @@ class AdaptiveButton extends StatelessWidget {
             ? const SizedBox(
                 width: 24,
                 height: 24,
-                child: CircularProgressIndicator(strokeWidth: 2),
+                child: CircularProgressIndicator.adaptive(strokeWidth: 2),
               )
             : child,
       ),

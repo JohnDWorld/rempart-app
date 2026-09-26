@@ -79,6 +79,13 @@
                 <category android:name="android.intent.category.BROWSABLE"/>
                 <data android:scheme="fr.rempart-messenger.app"/>
             </intent-filter>
+            <!-- Ces liens sont pour Supabase seul, qui les lit lui-meme. Laisse
+                 actif, le relais de Flutter les transmettait AUSSI au routeur,
+                 qui repartait de l'ecran de demarrage et chassait la page
+                 affichee en reponse au lien (voir main.dart). -->
+            <meta-data
+                android:name="flutter_deeplinking_enabled"
+                android:value="false" />
         </activity>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->

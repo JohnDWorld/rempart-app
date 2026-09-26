@@ -8,6 +8,7 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/plateforme.dart';
 import '../../../data/providers/providers.dart';
 import '../../../services/auth_service.dart';
+import '../../widgets/adaptive/adaptive.dart';
 import '../../widgets/common/loading_button.dart';
 
 /// Écran d'inscription
@@ -187,7 +188,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
-          icon: Icon(Icons.adaptive.arrow_back),
+          icon: Icon(iconeRetour),
           onPressed: () => context.go('/login'),
         ),
       ),
@@ -252,7 +253,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
-          icon: Icon(Icons.adaptive.arrow_back),
+          icon: Icon(iconeRetour),
           onPressed: () => context.go('/login'),
         ),
       ),
@@ -433,7 +434,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     const SizedBox(height: 24),
 
                     // Acceptation CGU
-                    CheckboxListTile(
+                    CheckboxListTile.adaptive(
                       value: _acceptTerms,
                       onChanged: (value) {
                         setState(() {

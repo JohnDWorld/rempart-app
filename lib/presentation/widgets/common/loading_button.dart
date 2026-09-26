@@ -37,7 +37,7 @@ class LoadingButton extends StatelessWidget {
             ? const SizedBox(
                 height: 20,
                 width: 20,
-                child: CircularProgressIndicator(
+                child: CircularProgressIndicator.adaptive(
                   strokeWidth: 2,
                 ),
               )
@@ -75,7 +75,7 @@ class LoadingOutlinedButton extends StatelessWidget {
             ? const SizedBox(
                 height: 20,
                 width: 20,
-                child: CircularProgressIndicator(
+                child: CircularProgressIndicator.adaptive(
                   strokeWidth: 2,
                 ),
               )

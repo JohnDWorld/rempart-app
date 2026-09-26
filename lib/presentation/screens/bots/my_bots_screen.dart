@@ -74,9 +74,9 @@ class _MyBotsScreenState extends ConsumerState<MyBotsScreen> {
   }
 
   Future<void> _regenerateToken(UserBot bot) async {
-    final ok = await showDialog<bool>(
+    final ok = await showAdaptiveDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => DialogueAdaptatif(
         title: const Text('Régénérer le token ?'),
         content: Text(
           "L'ancien token de ${bot.name} cessera immédiatement de fonctionner. "
@@ -84,11 +84,12 @@ class _MyBotsScreenState extends ConsumerState<MyBotsScreen> {
           'conversations sont conservés.',
         ),
         actions: [
-          TextButton(
+          ActionDialogue(
             onPressed: () => Navigator.pop(context, false),
             child: const Text('Annuler'),
           ),
-          TextButton(
+          ActionDialogue(
+            destructive: true,
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Régénérer'),
           ),
@@ -125,7 +126,7 @@ class _MyBotsScreenState extends ConsumerState<MyBotsScreen> {
   }
 
   Future<void> _configureBot(UserBot bot) async {
-    final result = await showDialog<_BotConfigResult>(
+    final result = await showAdaptiveDialog<_BotConfigResult>(
       context: context,
       builder: (context) => _BotConfigDialog(bot: bot),
     );
@@ -210,20 +211,21 @@ class _MyBotsScreenState extends ConsumerState<MyBotsScreen> {
   }
 
   Future<void> _confirmDelete(UserBot bot) async {
-    final ok = await showDialog<bool>(
+    final ok = await showAdaptiveDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => DialogueAdaptatif(
         title: const Text('Supprimer le bot ?'),
         content: Text(
           'Le bot ${bot.name} sera révoqué et cessera de répondre. '
           'Cette action est définitive.',
         ),
         actions: [
-          TextButton(
+          ActionDialogue(
             onPressed: () => Navigator.pop(context, false),
             child: const Text('Annuler'),
           ),
-          TextButton(
+          ActionDialogue(
+            destructive: true,
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Supprimer'),
           ),
@@ -247,7 +249,7 @@ class _MyBotsScreenState extends ConsumerState<MyBotsScreen> {
   }
 
   Future<({String nom, String username})?> _askName() {
-    return showDialog<({String nom, String username})>(
+    return showAdaptiveDialog<({String nom, String username})>(
       context: context,
       builder: (context) => const _DialogueNouveauBot(),
     );
@@ -256,10 +258,10 @@ class _MyBotsScreenState extends ConsumerState<MyBotsScreen> {
   Future<void> _showToken(CreatedBot bot, {String title = 'Bot créé'}) {
     final messenger = ScaffoldMessenger.of(context);
     final theme = Theme.of(context);
-    return showDialog<void>(
+    return showAdaptiveDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
+      builder: (context) => DialogueAdaptatif(
         title: Text(title),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -311,7 +313,7 @@ class _MyBotsScreenState extends ConsumerState<MyBotsScreen> {
           ],
         ),
         actions: [
-          TextButton(
+          ActionDialogue(
             onPressed: () {
               Clipboard.setData(ClipboardData(text: bot.apiToken));
               messenger.showSnackBar(
@@ -320,7 +322,8 @@ class _MyBotsScreenState extends ConsumerState<MyBotsScreen> {
             },
             child: const Text('Copier'),
           ),
-          TextButton(
+          ActionDialogue(
+            principale: true,
             onPressed: () => Navigator.pop(context),
             child: const Text("J'ai noté"),
           ),
@@ -362,7 +365,7 @@ class _MyBotsScreenState extends ConsumerState<MyBotsScreen> {
               future: _botsFuture,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
+                  return const Center(child: CircularProgressIndicator.adaptive());
                 }
                 if (snapshot.hasError) {
                   return _ErrorView(
@@ -429,7 +432,7 @@ class _MyBotsScreenState extends ConsumerState<MyBotsScreen> {
           if (_busy)
             const ColoredBox(
               color: Color(0x66000000),
-              child: Center(child: CircularProgressIndicator()),
+              child: Center(child: CircularProgressIndicator.adaptive()),
             ),
         ],
       ),
@@ -517,7 +520,10 @@ class _BotTile extends StatelessWidget {
           if (bot.moderationReason.isNotEmpty)
             _ModerationBanner(reason: bot.moderationReason),
           ListTile(
-            isThreeLine: bot.description.isNotEmpty,
+            // La carte suit son texte : réserver trois lignes dès qu'il y a une
+            // description laissait un vide sous celles qui n'en font qu'une.
+            // Courte, l'avatar se centre ; haute, il se cale près du nom.
+            titleAlignment: ListTileTitleAlignment.titleHeight,
             leading: CircleAvatar(
               backgroundColor: theme.colorScheme.primaryContainer,
               child: Icon(Icons.smart_toy_outlined,
@@ -546,10 +552,8 @@ class _BotTile extends StatelessWidget {
                 color: theme.colorScheme.outline,
               ),
             ),
-            trailing: PopupMenuButton<String>(
+            trailing: MenuAdaptatif<String>(
               enabled: enabled,
-              icon: Icon(Icons.adaptive.more),
-              tooltip: 'Actions',
               onSelected: (value) {
                 if (value == 'chat') {
                   onOuvrirChat?.call();
@@ -565,68 +569,48 @@ class _BotTile extends StatelessWidget {
                   onDelete?.call();
                 }
               },
-              itemBuilder: (context) => [
+              entrees: [
                 // En tête : c'est l'action qu'on vient chercher le plus souvent,
                 // parler à son bot pour vérifier que l'agent répond bien.
-                const PopupMenuItem<String>(
-                  value: 'chat',
-                  child: ListTile(
-                    leading: Icon(Icons.chat_bubble_outline),
-                    title: Text('Ouvrir la conversation'),
-                    contentPadding: EdgeInsets.zero,
-                  ),
+                const EntreeMenu(
+                  valeur: 'chat',
+                  libelle: 'Ouvrir la conversation',
+                  icone: Icons.chat_bubble_outline,
                 ),
-                const PopupMenuItem<String>(
-                  value: 'adresse',
-                  child: ListTile(
-                    leading: Icon(Icons.alternate_email),
-                    title: Text("Copier l'adresse du bot"),
-                    contentPadding: EdgeInsets.zero,
-                  ),
+                const EntreeMenu(
+                  valeur: 'adresse',
+                  libelle: "Copier l'adresse du bot",
+                  icone: Icons.alternate_email,
                 ),
-                const PopupMenuItem<String>(
-                  value: 'configure',
-                  child: ListTile(
-                    leading: Icon(Icons.tune),
-                    title: Text('Configurer'),
-                    contentPadding: EdgeInsets.zero,
-                  ),
+                const EntreeMenu(
+                  valeur: 'configure',
+                  libelle: 'Configurer',
+                  icone: Icons.tune,
                 ),
                 // Un agent livré n'est pas publiable : son persona est le
                 // produit de la boutique, et l'ouvrir à l'annuaire ferait
                 // répondre l'agent d'un client à tout le monde, aux frais de
                 // l'exploitant qui l'héberge.
                 if (!bot.managed)
-                  PopupMenuItem<String>(
-                    value: 'visibility',
-                    child: ListTile(
-                      leading: Icon(
-                        bot.isPublic ? Icons.lock_outline : Icons.public,
-                      ),
-                      title: Text(
-                        bot.isPublic ? 'Rendre privé' : 'Rendre public',
-                      ),
-                      contentPadding: EdgeInsets.zero,
-                    ),
+                  EntreeMenu(
+                    valeur: 'visibility',
+                    libelle: bot.isPublic ? 'Rendre privé' : 'Rendre public',
+                    icone: bot.isPublic ? Icons.lock_outline : Icons.public,
                   ),
                 // Le token vit chez l'exploitant, qui fait tourner l'agent :
                 // le régénérer couperait le service sans rien apporter.
                 if (!bot.managed)
-                  const PopupMenuItem<String>(
-                    value: 'regenerate',
-                    child: ListTile(
-                      leading: Icon(Icons.vpn_key_outlined),
-                      title: Text('Régénérer le token'),
-                      contentPadding: EdgeInsets.zero,
-                    ),
+                  const EntreeMenu(
+                    valeur: 'regenerate',
+                    libelle: 'Régénérer le token',
+                    icone: Icons.vpn_key_outlined,
+                    destructive: true,
                   ),
-                const PopupMenuItem<String>(
-                  value: 'delete',
-                  child: ListTile(
-                    leading: Icon(Icons.delete_outline),
-                    title: Text('Supprimer'),
-                    contentPadding: EdgeInsets.zero,
-                  ),
+                const EntreeMenu(
+                  valeur: 'delete',
+                  libelle: 'Supprimer',
+                  icone: Icons.delete_outline,
+                  destructive: true,
                 ),
               ],
             ),
@@ -871,7 +855,7 @@ class _BotConfigDialogState extends State<_BotConfigDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
+    return DialogueAdaptatif(
       title: const Text('Configurer le bot'),
       content: SingleChildScrollView(
         child: Column(
@@ -901,6 +885,7 @@ class _BotConfigDialogState extends State<_BotConfigDialog> {
                 hintText: "/meteo - météo du jour\n/aide - obtenir de l'aide",
                 alignLabelWithHint: true,
                 helperText: 'Une par ligne : commande - description',
+                helperMaxLines: 3,
               ),
             ),
             const SizedBox(height: 12),
@@ -910,17 +895,18 @@ class _BotConfigDialogState extends State<_BotConfigDialog> {
                 labelText: "Avatar (URL d'image)",
                 hintText: 'https://...',
                 helperText: 'Laisser vide pour ne pas changer',
+                helperMaxLines: 3,
               ),
             ),
           ],
         ),
       ),
       actions: [
-        TextButton(
+        ActionDialogue(
           onPressed: () => Navigator.pop(context),
           child: const Text('Annuler'),
         ),
-        TextButton(onPressed: _save, child: const Text('Enregistrer')),
+        ActionDialogue(principale: true, onPressed: _save, child: const Text('Enregistrer')),
       ],
     );
   }
@@ -1009,7 +995,7 @@ class _DialogueNouveauBotState extends State<_DialogueNouveauBot> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
+    return DialogueAdaptatif(
       title: const Text('Nouveau bot'),
       // Défilable : clavier ouvert, le dialogue n'a plus la place d'afficher
       // ses deux champs, et ce sont les explications du bas qui disparaissent.
@@ -1045,6 +1031,7 @@ class _DialogueNouveauBotState extends State<_DialogueNouveauBot> {
                 labelText: 'Nom affiché (facultatif)',
                 hintText: 'Agent',
                 helperText: 'Modifiable à tout moment.',
+                helperMaxLines: 3,
               ),
               onSubmitted: (_) => _creer(),
             ),
@@ -1052,11 +1039,12 @@ class _DialogueNouveauBotState extends State<_DialogueNouveauBot> {
         ),
       ),
       actions: [
-        TextButton(
+        ActionDialogue(
           onPressed: () => Navigator.pop(context),
           child: const Text('Annuler'),
         ),
-        TextButton(
+        ActionDialogue(
+          principale: true,
           onPressed: _peutCreer ? _creer : null,
           child: const Text('Créer'),
         ),
