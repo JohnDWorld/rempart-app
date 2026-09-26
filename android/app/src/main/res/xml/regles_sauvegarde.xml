@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Rien de Rempart ne sort de l'appareil par les sauvegardes du système.
+
+  La base locale contient les messages DÉCHIFFRÉS, les clés de l'appareil et
+  les secrets du coffre : la laisser partir dans une sauvegarde Google Drive,
+  ou dans la copie d'un téléphone à l'autre, défaisait le chiffrement de bout
+  en bout. Sur un nouvel appareil, on se reconnecte, et l'historique revient
+  par la sauvegarde CHIFFRÉE des clés (celle de Matrix), pas par celle du
+  système.
+
+  `android:allowBackup="false"` ne suffit plus depuis Android 12 : il coupe la
+  sauvegarde dans le nuage, mais pas le transfert d'appareil à appareil
+  (Smart Switch et consorts). D'où ces règles, qui excluent tout dans les
+  deux cas. `root` couvre à lui seul fichiers, bases et préférences ; les
+  autres domaines sont nommés pour qu'on n'ait pas à le savoir.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="external" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" path="." />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+        <exclude domain="sharedpref" path="." />
+        <exclude domain="external" path="." />
+    </device-transfer>
+</data-extraction-rules>

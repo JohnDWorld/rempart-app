@@ -11,6 +11,7 @@ import 'package:vodozemac/vodozemac.dart' as vod;
 import '../../core/constants/matrix_constants.dart';
 import '../../core/plateforme.dart';
 import '../models/matrix_extensions.dart';
+import 'client_rempart.dart';
 import 'notification_service.dart';
 
 /// Service pour la gestion de la connexion et des opérations Matrix
@@ -81,7 +82,9 @@ class MatrixService {
             ),
           );
 
-    _client = Client(
+    // `ClientRempart` et non `Client` : il refuse d'écrire en clair dans un
+    // salon chiffré quand vodozemac n'a pas démarré (voir sa documentation).
+    _client = ClientRempart(
       MatrixConstants.applicationName,
       database: matrixDb,
       // Sans cette déclaration, le SDK jette **toutes** les demandes de
@@ -1012,6 +1015,12 @@ class MatrixService {
   /// Crée un groupe.
   ///
   /// Chiffré E2E par défaut pour les groupes privés (chat "sécurisé").
+  ///
+  /// Le chiffrement fait partie de l'état INITIAL du salon, et non d'un
+  /// second appel : le salon naît chiffré, sans instant où il existerait en
+  /// clair, invités compris. Si le chiffrement ne tourne pas sur l'appareil,
+  /// on refuse de créer le groupe plutôt que de le créer en clair : c'est ce
+  /// que faisait l'ancien code, sans prévenir personne.
   Future<String> createGroup({
     required String name,
     List<String>? inviteUserIds,
@@ -1019,19 +1028,27 @@ class MatrixService {
     bool isPublic = false,
     bool encrypted = true,
   }) async {
-    final roomId = await _client!.createRoom(
+    final chiffre = encrypted && !isPublic;
+    if (chiffre && !_client!.encryptionEnabled) {
+      throw ChiffrementIndisponible();
+    }
+    return _client!.createRoom(
       name: name,
       topic: topic,
       invite: inviteUserIds,
       preset:
           isPublic ? CreateRoomPreset.publicChat : CreateRoomPreset.privateChat,
       visibility: isPublic ? Visibility.public : Visibility.private,
+      initialState: [
+        if (chiffre)
+          StateEvent(
+            type: EventTypes.Encryption,
+            content: {
+              'algorithm': Client.supportedGroupEncryptionAlgorithms.first,
+            },
+          ),
+      ],
     );
-    // Chiffrer les groupes privés (createRoom ne l'active pas de lui-même).
-    if (encrypted && !isPublic && _client!.encryptionEnabled) {
-      await _client!.getRoomById(roomId)?.enableEncryption();
-    }
-    return roomId;
   }
 
   /// Rejoint une room par ID ou alias
@@ -1303,9 +1320,23 @@ class MatrixService {
   }) async {
     final room = _client!.getRoomById(roomId);
     if (room == null) return null;
+    _exigerChiffrement(room);
 
     final eventId = await room.sendFileEvent(file);
     return eventId;
+  }
+
+  /// Arrête un média avant son téléversement si le salon est chiffré et que
+  /// le chiffrement ne tourne pas sur l'appareil.
+  ///
+  /// `ClientRempart` bloque le message, mais trop tard pour un média : le SDK
+  /// téléverse le fichier d'abord, et le téléverserait EN CLAIR faute de
+  /// chiffrement. Le serveur garderait alors la photo lisible, même si le
+  /// message qui la décrit n'est jamais parti.
+  void _exigerChiffrement(Room room) {
+    if (room.encrypted && !_client!.encryptionEnabled) {
+      throw ChiffrementIndisponible();
+    }
   }
 
   /// Répond à un bouton d'agent : la valeur part, le libellé s'affiche.
@@ -1366,6 +1397,7 @@ class MatrixService {
   }) async {
     final room = _client!.getRoomById(roomId);
     if (room == null) return null;
+    _exigerChiffrement(room);
 
     return room.sendFileEvent(
       MatrixAudioFile(
@@ -1413,6 +1445,7 @@ class MatrixService {
   }) async {
     final room = _client!.getRoomById(roomId);
     if (room == null) return null;
+    _exigerChiffrement(room);
 
     final texte = caption?.trim() ?? '';
     final extra = <String, dynamic>{
