@@ -233,6 +233,14 @@ class AuthService {
     final response = await _client.auth.signUp(
       email: email,
       password: secrets.connexion,
+      // Le lien du courriel mène à une page « Adresse confirmée » du site, qui
+      // renvoie dans l'application. Sans lui, Supabase retombait sur son
+      // `SITE_URL`, la version navigateur, qui ouvrait une session web : on
+      // s'était inscrit sur son téléphone et on se retrouvait dans un
+      // navigateur. Pas l'application directement : elle recevrait une session
+      // sans le mot de passe, qui est ce qui ouvre le coffre de chiffrement
+      // (voir la page, `rempart-backend/web/adresse-confirmee.html`).
+      emailRedirectTo: 'https://rempart-messenger.fr/adresse-confirmee.html',
       data: {
         if (displayName != null) 'display_name': displayName,
         cleVersionMotDePasse: 2,
