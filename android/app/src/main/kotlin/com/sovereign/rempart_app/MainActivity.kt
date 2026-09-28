@@ -4,8 +4,12 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
+import android.view.View
+import android.view.WindowInsets
+import android.view.WindowInsetsAnimation
 import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -21,6 +25,67 @@ import java.io.File
 class MainActivity : FlutterActivity() {
 
     private val canal = "rempart/maj"
+
+    /**
+     * Clavier fantome : au retour dans l'application, un espace vide de la
+     * hauteur du clavier restait en bas de TOUS les ecrans, clavier ferme.
+     *
+     * Le moteur retient les marges du clavier pendant son animation et ne les
+     * transmet qu'a la fin (`ImeSyncDeferringInsetsCallback`) : a `onEnd`, il
+     * renvoie les DERNIERES marges qu'il a mises de cote. Vecu le 2026-09-27
+     * sur le Xiaomi : Rempart quitte par le geste, clavier ouvert, mis en
+     * veille par MIUI, puis rouvert par son icone. MIUI anime alors la
+     * fermeture du clavier, deux fois de suite, pendant la transition
+     * d'ouverture (journal : deux `hide: ime`, puis `ImeTracker onTimeout at
+     * PHASE_CLIENT_REPORT_REQUESTED_VISIBLE_TYPES`). Les vraies marges ne
+     * tombent pas dans la fenetre que le moteur surveille, et il ressert
+     * celles d'avant le depart, clavier ouvert. Code identique dans le Flutter
+     * le plus recent (sept. 2026) : rien a attendre d'une mise a jour.
+     *
+     * Remede : apres chaque animation du clavier, et au retour de la fenetre
+     * (au cas ou l'animation ne finirait jamais), si Android dit le clavier
+     * ferme, donner a la vue Flutter les vraies marges en passant a cote de
+     * l'intercepteur, comme le moteur le fait lui-meme pendant ses animations.
+     * Sans effet quand tout va bien : les marges sont deja celles-la.
+     */
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+        val vue = findViewById<View>(FlutterActivity.FLUTTER_VIEW_ID) ?: return
+        // Pose sur le PARENT : la vue Flutter a deja le sien, qu'un second
+        // remplacerait. CONTINUE_ON_SUBTREE le laisse recevoir l'animation.
+        (vue.parent as? View)?.setWindowInsetsAnimationCallback(
+            object : WindowInsetsAnimation.Callback(DISPATCH_MODE_CONTINUE_ON_SUBTREE) {
+                override fun onProgress(
+                    insets: WindowInsets,
+                    animations: MutableList<WindowInsetsAnimation>,
+                ) = insets
+
+                override fun onEnd(animation: WindowInsetsAnimation) {
+                    // Le parent recoit onEnd AVANT l'enfant : attendre que le
+                    // moteur ait fini de renvoyer ses marges.
+                    if (animation.typeMask and WindowInsets.Type.ime() != 0) {
+                        vue.post { realignerClavier(vue) }
+                    }
+                }
+            },
+        )
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (!hasFocus || Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+        val vue = findViewById<View>(FlutterActivity.FLUTTER_VIEW_ID) ?: return
+        // ponytail: delai fixe, le temps qu'une fermeture lancee au retour ait
+        // fini (une demi-seconde mesuree) ; ne sert que si onEnd n'arrive pas.
+        vue.postDelayed({ realignerClavier(vue) }, 1000)
+    }
+
+    private fun realignerClavier(vue: View) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+        val marges = vue.rootWindowInsets ?: return
+        if (!marges.isVisible(WindowInsets.Type.ime())) vue.onApplyWindowInsets(marges)
+    }
 
     override fun configureFlutterEngine(engine: FlutterEngine) {
         super.configureFlutterEngine(engine)
