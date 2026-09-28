@@ -242,10 +242,17 @@ class AuthService {
     if (response.user != null) {
       await _memoriserMigre(email);
 
-      // 2. Créer le profil Supabase
-      if (displayName != null) {
-        await _createUserProfile(response.user!.id, email, displayName);
-      }
+      // 2. Le profil Supabase, l'application ne l'écrit pas : le déclencheur
+      // `handle_new_user` le crée avec le compte, nom d'affichage compris
+      // (passé dans `data`). Elle l'écrivait en double, et quand la
+      // confirmation par e-mail est exigée (la production), `signUp` ne rend
+      // pas de session : l'écriture partait sans compte, la base la refusait,
+      // et l'inscription affichait une erreur alors que le compte existait
+      // (vécu le 2026-09-28, à la première inscription en production).
+      //
+      // Sans session, Matrix et le coffre attendent la première connexion,
+      // qui les monte (`signIn`).
+      if (response.session == null) return response;
 
       // 3. Session Matrix (awaitée, rapide) puis durcissement E2E en tâche de
       // fond : le bootstrap E2E gèle l'UI ~21s s'il est awaité ici. On laisse
@@ -617,21 +624,6 @@ class AuthService {
         data: data.isNotEmpty ? data : null,
       ),
     );
-  }
-
-  /// Créer le profil utilisateur dans la table profiles
-  Future<void> _createUserProfile(
-    String userId,
-    String email,
-    String displayName,
-  ) async {
-    // Note: email n'est pas stocké dans profiles car déjà dans auth.users
-    // username est généré à partir de l'email
-    await _client.from('profiles').upsert({
-      'id': userId,
-      'username': email.split('@').first,
-      'display_name': displayName,
-    });
   }
 
   /// Récupérer le profil utilisateur
