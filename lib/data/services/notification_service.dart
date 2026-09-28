@@ -281,7 +281,7 @@ class NotificationService {
           id: room.id.hashCode,
           apercu: composerApercu(
             texte: 'a réagi $symbole à votre message',
-            nomExpediteur: event.nomLisibleDeLExpediteur,
+            nomExpediteur: await nomDeLExpediteurPourNotification(event),
             nomRoom: room.name.isEmpty ? null : room.name,
           ),
           roomId: room.id,
@@ -296,7 +296,7 @@ class NotificationService {
 
       final apercu = composerApercu(
         texte: await _corps(event),
-        nomExpediteur: event.nomLisibleDeLExpediteur,
+        nomExpediteur: await nomDeLExpediteurPourNotification(event),
         nomRoom: room.name.isEmpty ? null : room.name,
       );
 

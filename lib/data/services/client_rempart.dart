@@ -42,12 +42,16 @@ bool envoiAdmis({required bool salonChiffre, required String type}) =>
 /// Les pièces jointes échappent à ce verrou : le SDK téléverse le fichier
 /// AVANT d'envoyer le message qui le décrit. `MatrixService` les arrête donc
 /// en amont.
+///
+/// Il n'« embellit » pas non plus les identifiants (`formatLocalpart: false`) :
+/// sans nom connu, le SDK changeait `u_ae9db…` en `U Ae9db…`, forme que rien
+/// ne reconnaissait plus comme un identifiant (voir `estUnIdentifiant`).
 class ClientRempart extends Client {
   ClientRempart(
     super.clientName, {
     required super.database,
     super.verificationMethods,
-  });
+  }) : super(formatLocalpart: false);
 
   @override
   Future<String> sendMessage(

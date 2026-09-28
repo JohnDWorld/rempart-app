@@ -560,10 +560,44 @@ final _localpartEngendre = RegExp(r'^u(bot)?_[0-9a-f]{6,}$');
 /// Un bot, lui, s'appelle vraiment « hermes_bot » : son nom EST son localpart,
 /// et l'écarter le priverait du seul nom qu'il ait. D'où le test sur la forme
 /// engendrée, et non sur la simple égalité avec le localpart.
+///
+/// Le déguisement le plus courant vient du SDK lui-même : sans nom connu,
+/// `calcDisplayname` « embellit » le localpart (`u_ae9db…` devient
+/// `U Ae9db…`, tirets bas en espaces, initiales en capitales). Cette forme ne
+/// ressemblait plus à un identifiant, et elle est arrivée ainsi sur l'écran
+/// verrouillé d'une destinataire, au tout premier message d'un nouveau
+/// contact (2026-09-28). Elle est donc ramenée à la forme brute avant la
+/// comparaison. Le client est aussi réglé pour ne plus embellir
+/// (`formatLocalpart: false`) ; ceci en est le second verrou.
 bool estUnIdentifiant(String texte, String mxid) {
   if (texte == mxid) return true;
-  if (texte != _extractLocalpart(mxid)) return false;
-  return _localpartEngendre.hasMatch(texte);
+  final localpart = _extractLocalpart(mxid);
+  if (localpart == null || !_localpartEngendre.hasMatch(localpart)) {
+    return false;
+  }
+  return texte == localpart ||
+      texte.toLowerCase().replaceAll(' ', '_') == localpart;
+}
+
+/// Nom de l'expéditeur pour une notification, ou null s'il reste inconnu.
+///
+/// Celui que la mémoire connaît d'abord ; à défaut, son profil demandé au
+/// serveur. Au premier message d'un nouveau contact, l'état des membres n'est
+/// pas encore là (l'isolate d'arrière-plan vient de naître, ou le salon vient
+/// d'être rejoint), et la notification titrait « Rempart » alors que le nom
+/// était à une requête. Toute panne rend null : la notification part quand
+/// même, sous le titre neutre.
+Future<String?> nomDeLExpediteurPourNotification(Event event) async {
+  final connu = event.nomLisibleDeLExpediteur;
+  if (connu != null) return connu;
+  try {
+    final profil = await event.room.client.getUserProfile(event.senderId);
+    final nom = profil.displayname?.trim() ?? '';
+    if (nom.isEmpty || estUnIdentifiant(nom, event.senderId)) return null;
+    return nom;
+  } catch (_) {
+    return null;
+  }
 }
 
 /// Le contact est-il encore atteignable dans un tête-à-tête ?

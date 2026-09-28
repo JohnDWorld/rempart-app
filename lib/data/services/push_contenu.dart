@@ -55,6 +55,9 @@ Future<ApercuNotification?> _apercuDuPush({
     );
     client = Client(
       MatrixConstants.applicationName,
+      // Comme `ClientRempart` : un identifiant « embelli » (`U Ae9db…`) ne se
+      // reconnaissait plus, et partait en titre de notification.
+      formatLocalpart: false,
       database: await MatrixSdkDatabase.init(
         MatrixConstants.applicationName,
         database: base,
@@ -96,7 +99,7 @@ Future<ApercuNotification?> _apercuDuPush({
       if (vise == null || vise.senderId != client.userID) return null;
       return composerApercu(
         texte: 'a réagi $symbole à votre message',
-        nomExpediteur: evenement.nomLisibleDeLExpediteur,
+        nomExpediteur: await nomDeLExpediteurPourNotification(evenement),
         nomRoom: evenement.room.name.isEmpty ? null : evenement.room.name,
       );
     }
@@ -115,7 +118,7 @@ Future<ApercuNotification?> _apercuDuPush({
 
     return composerApercu(
       texte: texte,
-      nomExpediteur: evenement.nomLisibleDeLExpediteur,
+      nomExpediteur: await nomDeLExpediteurPourNotification(evenement),
       nomRoom: evenement.room.name.isEmpty ? null : evenement.room.name,
     );
   } catch (e) {
