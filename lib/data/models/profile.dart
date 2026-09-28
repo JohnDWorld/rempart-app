@@ -1,6 +1,10 @@
 import 'package:flutter/foundation.dart';
 
-/// Modèle représentant un profil utilisateur
+/// Modèle représentant un profil utilisateur.
+///
+/// Pas de téléphone, de présence ni de dernière activité : ces colonnes
+/// existaient en base sans que l'application les écrive jamais, et l'annuaire
+/// les servait à quiconque tenait la clé anonyme. Supprimées le 2026-09-27.
 @immutable
 class Profile {
   const Profile({
@@ -11,9 +15,6 @@ class Profile {
     this.displayName,
     this.avatarUrl,
     this.bio,
-    this.phone,
-    this.isOnline = false,
-    this.lastSeenAt,
   });
 
   factory Profile.fromJson(Map<String, dynamic> json) {
@@ -23,11 +24,6 @@ class Profile {
       displayName: json['display_name'] as String?,
       avatarUrl: json['avatar_url'] as String?,
       bio: json['bio'] as String?,
-      phone: json['phone'] as String?,
-      isOnline: json['is_online'] as bool? ?? false,
-      lastSeenAt: json['last_seen_at'] != null
-          ? DateTime.parse(json['last_seen_at'] as String)
-          : null,
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: DateTime.parse(json['updated_at'] as String),
     );
@@ -38,9 +34,6 @@ class Profile {
   final String? displayName;
   final String? avatarUrl;
   final String? bio;
-  final String? phone;
-  final bool isOnline;
-  final DateTime? lastSeenAt;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -55,9 +48,6 @@ class Profile {
       'display_name': displayName,
       'avatar_url': avatarUrl,
       'bio': bio,
-      'phone': phone,
-      'is_online': isOnline,
-      'last_seen_at': lastSeenAt?.toIso8601String(),
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };
@@ -70,9 +60,6 @@ class Profile {
     String? displayName,
     String? avatarUrl,
     String? bio,
-    String? phone,
-    bool? isOnline,
-    DateTime? lastSeenAt,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -82,9 +69,6 @@ class Profile {
       displayName: displayName ?? this.displayName,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       bio: bio ?? this.bio,
-      phone: phone ?? this.phone,
-      isOnline: isOnline ?? this.isOnline,
-      lastSeenAt: lastSeenAt ?? this.lastSeenAt,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

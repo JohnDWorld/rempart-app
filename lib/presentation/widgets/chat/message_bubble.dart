@@ -734,6 +734,36 @@ class _Reactions extends StatelessWidget {
 }
 
 
+/// Les boutons que porte un message, lus dans `fr.rempart.boutons`.
+///
+/// Le champ vient d'un tiers : la passerelle borne ce qu'elle envoie (huit
+/// boutons, libellés de 40 caractères, valeurs de 200), mais n'importe quel
+/// client Matrix peut le poser tel qu'il veut. Mêmes bornes ici, sans quoi des
+/// milliers de boutons gelaient l'écran de tout le salon ; et un bouton mal
+/// formé (libellé qui n'est pas du texte) est ignoré plutôt que fatal.
+List<({String texte, String valeur})> boutonsDuContenu(
+  Map<String, dynamic> content,
+) {
+  final brut = content['fr.rempart.boutons'];
+  if (brut is! List) return const [];
+  final boutons = <({String texte, String valeur})>[];
+  for (final item in brut) {
+    if (boutons.length >= 8) break;
+    if (item is! Map) continue;
+    final texte = item['texte'];
+    final valeur = item['valeur'];
+    if (texte is! String || valeur is! String) continue;
+    final t = texte.trim();
+    final v = valeur.trim();
+    if (t.isEmpty || v.isEmpty) continue;
+    boutons.add((
+      texte: t.length > 40 ? t.substring(0, 40) : t,
+      valeur: v.length > 200 ? v.substring(0, 200) : v,
+    ));
+  }
+  return boutons;
+}
+
 /// Boutons proposés par un bot sous son message.
 ///
 /// Matrix n'a pas de standard pour cela : le champ `fr.rempart.boutons` est à
@@ -746,26 +776,13 @@ class _Boutons extends StatelessWidget {
   final matrix.Event event;
   final void Function(String texte, String valeur)? onBouton;
 
-  static const _champ = 'fr.rempart.boutons';
-
   @override
   Widget build(BuildContext context) {
     // Un message effacé ne propose plus rien : ses boutons partiraient
     // répondre à une question qui n'existe plus.
     if (event.redacted || onBouton == null) return const SizedBox.shrink();
 
-    final brut = event.content[_champ];
-    if (brut is! List || brut.isEmpty) return const SizedBox.shrink();
-
-    final boutons = <({String texte, String valeur})>[];
-    for (final item in brut) {
-      if (item is! Map) continue;
-      final texte = (item['texte'] as String?)?.trim() ?? '';
-      final valeur = (item['valeur'] as String?)?.trim() ?? '';
-      if (texte.isNotEmpty && valeur.isNotEmpty) {
-        boutons.add((texte: texte, valeur: valeur));
-      }
-    }
+    final boutons = boutonsDuContenu(event.content);
     if (boutons.isEmpty) return const SizedBox.shrink();
 
     // Deux par ligne, et le dernier seul prend toute la largeur : c'est la

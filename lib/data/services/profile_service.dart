@@ -125,17 +125,6 @@ class ProfileService {
         .update({'avatar_url': null}).eq('id', userId);
   }
 
-  /// Mettre à jour le statut en ligne
-  Future<void> setOnlineStatus({required bool isOnline}) async {
-    final userId = _client.auth.currentUser?.id;
-    if (userId == null) return;
-
-    await _client.from('profiles').update({
-      'is_online': isOnline,
-      'last_seen_at': DateTime.now().toIso8601String(),
-    }).eq('id', userId);
-  }
-
   /// Stream des changements de profil
   Stream<Profile> watchProfile(String userId) {
     return _client

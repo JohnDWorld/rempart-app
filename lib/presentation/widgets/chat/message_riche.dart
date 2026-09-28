@@ -114,26 +114,7 @@ class _MessageRicheState extends State<MessageRiche> {
 
   /// Reconnaisseur de tap sur un lien, retenu pour être libéré plus tard.
   TapGestureRecognizer _reconnaisseurLien(String href) {
-    final recognizer = TapGestureRecognizer()
-      ..onTap = () async {
-        final uri = Uri.tryParse(href);
-        if (uri == null) return;
-        // On tente l'ouverture sans passer par `canLaunchUrl` : sa réponse
-        // dépend des déclarations `queries` du manifeste et vaut « non » un
-        // peu trop facilement, ce qui laissait le lien sans effet et sans
-        // explication. En cas d'échec, l'adresse part au moins dans le
-        // presse-papier plutôt que d'être perdue.
-        try {
-          await launchUrl(uri, mode: LaunchMode.externalApplication);
-        } catch (_) {
-          try {
-            await launchUrl(uri);
-          } catch (e) {
-            debugPrint('MessageRiche: lien non ouvrable ($href) : $e');
-            await Clipboard.setData(ClipboardData(text: href));
-          }
-        }
-      };
+    final recognizer = TapGestureRecognizer()..onTap = () => ouvrirLien(href);
     _recognizers.add(recognizer);
     return recognizer;
   }
@@ -784,13 +765,35 @@ class _TexteAvecLiensState extends State<TexteAvecLiens> {
   }
 }
 
+/// Schémas qu'un lien de message a le droit d'ouvrir.
+///
+/// Le `href` d'un message mis en forme vient d'un tiers : `javascript:`,
+/// `file:`, `intent:` ou le schéma d'une application quelconque n'ont rien à
+/// faire dans un `launchUrl`. Avant le 2026-09-27, tout y partait tel quel.
+const schemasOuvrables = {'http', 'https', 'mailto', 'tel'};
+
+/// Cette adresse peut-elle être ouverte depuis un message ?
+bool lienOuvrable(String href) {
+  final uri = Uri.tryParse(href.trim());
+  if (uri == null || !schemasOuvrables.contains(uri.scheme.toLowerCase())) {
+    return false;
+  }
+  return uri.scheme.toLowerCase().startsWith('http')
+      ? uri.host.isNotEmpty
+      : uri.path.isNotEmpty;
+}
+
 /// Ouvre une adresse, ou la copie si rien ne sait l'ouvrir.
 ///
 /// On tente sans passer par `canLaunchUrl` : sa réponse dépend des
 /// déclarations `queries` du manifeste et vaut « non » un peu trop facilement,
 /// ce qui laissait le lien sans effet et sans explication.
 Future<void> ouvrirLien(String href) async {
-  final uri = Uri.tryParse(href);
+  if (!lienOuvrable(href)) {
+    debugPrint('Lien refusé (schéma) : $href');
+    return;
+  }
+  final uri = Uri.tryParse(href.trim());
   if (uri == null) return;
   try {
     await launchUrl(uri, mode: LaunchMode.externalApplication);

@@ -320,7 +320,6 @@ class _NewChatScreenState extends ConsumerState<NewChatScreen> {
         name: profile.name,
         imageUrl: profile.avatarUrl,
         size: 44,
-        isOnline: profile.isOnline,
       ),
       title: Text(profile.name),
       subtitle: Text('@${profile.username}'),
@@ -334,7 +333,6 @@ class _NewChatScreenState extends ConsumerState<NewChatScreen> {
       leading: UserAvatar(
         name: profile.name,
         imageUrl: profile.avatarUrl,
-        isOnline: profile.isOnline,
       ),
       title: Text(profile.name),
       subtitle: Text('@${profile.username}'),

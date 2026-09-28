@@ -6,8 +6,9 @@
   silencieusement (« Une erreur est survenue »). On autorise donc le clair
   globalement tant qu'on n'est pas en HTTPS.
 
-  A durcir en prod (serveurs HTTPS) : remplacer par un base-config
-  cleartextTrafficPermitted="false" + un domain-config restreint si besoin.
+  Le build Play (scripts/publier-aab.sh) n'embarque pas ce fichier : il
+  detache l'attribut networkSecurityConfig du manifeste et passe
+  usesCleartextTraffic a false, les serveurs publics etant en HTTPS.
 -->
 <network-security-config>
     <base-config cleartextTrafficPermitted="true" />
