@@ -42,10 +42,6 @@ class _AccueilScreenState extends State<AccueilScreen>
     with WidgetsBindingObserver {
   int _onglet = 0;
 
-  /// Hauteur de la barre elle-même. La zone sûre du bas (barre de gestes)
-  /// s'y ajoute : sans elle, le dernier réglage passait sous la barre.
-  static const _hauteurBarre = 74.0;
-
   @override
   void initState() {
     super.initState();
@@ -84,8 +80,6 @@ class _AccueilScreenState extends State<AccueilScreen>
 
   @override
   Widget build(BuildContext context) {
-    final reserve = _hauteurBarre + MediaQuery.paddingOf(context).bottom;
-
     // Sur un écran large, pas de barre d'onglets : elle s'étirait sur toute
     // la largeur pour deux entrées, et « Paramètres » a rejoint le menu du
     // panneau de gauche, où l'on va déjà chercher le reste. La barre reste
@@ -94,27 +88,21 @@ class _AccueilScreenState extends State<AccueilScreen>
       return const Scaffold(body: _Messages());
     }
 
+    // La barre dans `bottomNavigationBar` et non posée par-dessus le contenu :
+    // c'est ce qui fait remonter les bandeaux (`SnackBar`) au-dessus d'elle.
+    // Posée dans une `Stack`, elle se faisait recouvrir par eux, et l'onglet
+    // Paramètres restait inaccessible tant qu'ils défilaient.
     return Scaffold(
-      body: Stack(
-        children: [
-          Padding(
-            padding: EdgeInsets.only(bottom: reserve),
-            child: IndexedStack(
-              index: _onglet,
-              children: const [
-                _Messages(),
-                SettingsScreen(),
-              ],
-            ),
-          ),
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: _BarreOnglets(
-              actif: _onglet,
-              onChange: (index) => setState(() => _onglet = index),
-            ),
-          ),
+      body: IndexedStack(
+        index: _onglet,
+        children: const [
+          _Messages(),
+          SettingsScreen(),
         ],
+      ),
+      bottomNavigationBar: _BarreOnglets(
+        actif: _onglet,
+        onChange: (index) => setState(() => _onglet = index),
       ),
     );
   }

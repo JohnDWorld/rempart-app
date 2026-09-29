@@ -9,6 +9,7 @@ import '../core/plateforme.dart';
 import '../data/providers/mode_theme.dart';
 import '../data/services/matrix_service.dart';
 import '../data/services/notification_service.dart';
+import '../presentation/widgets/common/messager_rempart.dart';
 import '../presentation/widgets/settings/verification_appareil.dart';
 import 'cupertino_theme.dart';
 import 'router.dart';
@@ -75,9 +76,14 @@ class RempartApp extends ConsumerWidget {
       // Une demande de vérification arrive quand l'AUTRE appareil la lance,
       // pas quand on ouvre l'écran des appareils : l'écoute doit donc vivre
       // au-dessus de la navigation, sur tous les écrans.
-      builder: (context, child) => EcouteVerifications(
-        demandes: MatrixService.instance.demandesDeVerification,
-        enfant: child ?? const SizedBox.shrink(),
+      //
+      // `MessagerRempart` passe devant celui que pose `MaterialApp` : les
+      // bandeaux s'y remplacent au lieu de s'empiler, et se ferment d'un appui.
+      builder: (context, child) => MessagerRempart(
+        child: EcouteVerifications(
+          demandes: MatrixService.instance.demandesDeVerification,
+          enfant: child ?? const SizedBox.shrink(),
+        ),
       ),
 
       // Localisation. `supportedLocales` ne porte que le francais : Rempart
@@ -165,7 +171,7 @@ class _CupertinoAppWrapperState extends ConsumerState<_CupertinoAppWrapper>
           // iOS - et les ecrans recents (appareils, mes bots, boutique,
           // profil, mot de passe...) signalent tous leurs succes et leurs
           // erreurs par un `SnackBar`.
-          child: ScaffoldMessenger(
+          child: MessagerRempart(
             child: EcouteVerifications(
               demandes: MatrixService.instance.demandesDeVerification,
               enfant: child ?? const SizedBox.shrink(),

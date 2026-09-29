@@ -1,7 +1,7 @@
 name: rempart_app
 description: Rempart - Messagerie souveraine avec chiffrement E2E
 publish_to: 'none'
-version: 1.0.0+81
+version: 1.0.0+82
 environment:
   sdk: '>=3.3.0 <4.0.0'
 
@@ -88,6 +88,10 @@ dependencies:
   # MEDIA (pieces jointes)
   # ===========================================
   image_picker: ^1.2.3 # photos et videos (galerie + appareil photo)
+  # La galerie d'Android (et non l'explorateur de fichiers) se regle sur
+  # l'implementation Android elle-meme : voir `main.dart`.
+  image_picker_android: ^0.8.13
+  image_picker_platform_interface: ^2.11.1
   file_picker: ^10.3.3 # documents et fichiers quelconques
   # Enregistrement dans la galerie du telephone : sans lui, une photo recue ne
   # peut que se partager, jamais se garder.

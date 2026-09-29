@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker_android/image_picker_android.dart';
+import 'package:image_picker_platform_interface/image_picker_platform_interface.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -58,6 +60,15 @@ Future<void> _demarrer(List<String> args) async {
     await NotificationService.instance.init(demanderAutorisation: false);
     await PushService.instance.init();
     return;
+  }
+
+  // La galerie de photos d'Android, et non l'explorateur de fichiers : par
+  // défaut, `image_picker` demande au système un contenu quelconque, que
+  // celui-ci confie à « Fichiers ». Le sélecteur de photos retombe de
+  // lui-même sur l'explorateur là où il n'existe pas.
+  final selecteurDePhotos = ImagePickerPlatform.instance;
+  if (selecteurDePhotos is ImagePickerAndroid) {
+    selecteurDePhotos.useAndroidPhotoPicker = true;
   }
 
   // Initialiser Supabase avec les valeurs du .env. Le schema PostgREST est
