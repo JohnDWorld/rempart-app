@@ -10,6 +10,7 @@ import 'package:vodozemac/vodozemac.dart' as vod;
 
 import '../../core/constants/matrix_constants.dart';
 import '../../core/plateforme.dart';
+import '../../core/utils/demandes.dart';
 import '../models/matrix_extensions.dart';
 import 'client_rempart.dart';
 import 'notification_service.dart';
@@ -157,7 +158,46 @@ class MatrixService {
   final Set<String> _joiningInvites = {};
   final Set<String> _markedDirect = {};
 
-  /// Écoute les syncs et rejoint automatiquement les rooms où l'on est invité.
+  /// Mxid des bots de l'utilisateur (« Mes bots »), connus d'office : ses
+  /// agents l'invitent dans leurs salons, et onze demandes à valider pour ses
+  /// propres agents n'auraient aucun sens. Rempli au démarrage de session.
+  Set<String> _mesBots = const {};
+
+  void definirMesBots(Iterable<String> mxids) {
+    _mesBots = mxids.toSet();
+    _autoJoinInvites();
+  }
+
+  /// L'auteur d'une invitation : l'expéditeur de notre propre événement de
+  /// membre, seul état que le serveur livre avant qu'on ait rejoint.
+  String? inviteurDe(Room room) {
+    final moi = _client?.userID;
+    if (moi == null) return null;
+    return room.getState(EventTypes.RoomMember, moi)?.senderId;
+  }
+
+  bool estConnu(String mxid) => inviteurConnu(
+        mxid,
+        tetesATetes: _client?.directChats ?? const {},
+        mesBots: _mesBots,
+      );
+
+  /// Invitations d'inconnus, en attente d'une décision (écran `/demandes`).
+  ///
+  /// Une invitation dont l'auteur n'est pas encore rechargé (voir
+  /// `requestUser` dans `_autoJoinInvites`) n'est pas montrée : on ne saurait ni la nommer
+  /// ni la bloquer, et celle d'un connu serait prise à tort pour une demande.
+  /// Elle apparaît au battement suivant.
+  List<Room> get demandes => [
+        for (final room in _client?.rooms ?? const <Room>[])
+          if (room.membership == Membership.invite)
+            if (inviteurDe(room) case final inviteur?)
+              if (!estConnu(inviteur)) room,
+      ];
+
+  /// Écoute les syncs et rejoint automatiquement les rooms où l'on est invité
+  /// **par quelqu'un de connu** (voir `inviteurConnu`). Les autres
+  /// invitations deviennent des demandes.
   void _setupAutoJoinInvites() {
     _client?.onSync.stream.listen((_) => _autoJoinInvites());
     // Passe initiale : des invitations peuvent déjà être là au démarrage.
@@ -191,6 +231,29 @@ class MatrixService {
     }
     for (final room in client.rooms) {
       if (room.membership == Membership.invite) {
+        // Au démarrage, le SDK ne recharge de la base que l'état « important »
+        // (nom, avatar, chiffrement). Les événements de membre, dont celui de
+        // l'invitation, vivent dans une table à part que même `postLoad` ne
+        // relit pas : après un redémarrage, on ne savait plus QUI invitait.
+        // La demande s'affichait « Contact inconnu », Bloquer ne visait
+        // personne, et l'invitation d'un de ses propres agents restait en
+        // demande (essai du 2026-09-28). `requestUser` relit cette table.
+        // `requestProfile: false` : son repli fabriquerait un membre dont
+        // l'expéditeur serait nous-même.
+        final moi = client.userID;
+        if (moi != null && inviteurDe(room) == null) {
+          await room.requestUser(
+            moi,
+            requestProfile: false,
+            ignoreErrors: true,
+          );
+        }
+        // Un inconnu n'entre plus d'office : son invitation attend une
+        // décision (écran `/demandes`). Avant le 2026-09-28, toute invitation
+        // était acceptée au sync suivant, et n'importe quel inscrit pouvait
+        // écrire à n'importe qui, ou l'ajouter à un groupe.
+        final inviteur = inviteurDe(room);
+        if (inviteur == null || !estConnu(inviteur)) continue;
         if (!_joiningInvites.add(room.id)) {
           continue; // déjà un join en cours pour cette room
         }
@@ -868,6 +931,48 @@ class MatrixService {
 
   Future<void> debloquerUtilisateur(String mxid) async {
     await _client?.unignoreUser(mxid);
+  }
+
+  /// Accepte une demande. Un tête-à-tête entre alors dans `m.direct`, et les
+  /// invitations suivantes de la même personne passeront d'office.
+  Future<void> accepterDemande(Room room) async {
+    // `join` du SDK inscrit déjà un tête-à-tête dans `m.direct` avant de
+    // rejoindre.
+    final attente = _client?.waitForRoomInSync(room.id, join: true);
+    await room.join();
+    // Attendre que la synchronisation confirme : juste après l'appel, le SDK
+    // tient encore le salon pour « invité », et l'écran de conversation,
+    // ouvert dans la foulée, renvoyait aussitôt à l'accueil (essai du
+    // 2026-09-28). Borné : passé ce délai, la conversation s'ouvre au pire
+    // un peu tôt, jamais bloquée.
+    await attente?.timeout(const Duration(seconds: 10), onTimeout: () {
+      return SyncUpdate(nextBatch: '');
+    });
+  }
+
+  /// Refuse sans rien dire : l'autre voit seulement l'invitation déclinée,
+  /// comme sur n'importe quel client Matrix.
+  Future<void> refuserDemande(Room room) async {
+    await room.leave();
+    await room.forget();
+  }
+
+  /// Refuse et bloque.
+  ///
+  /// Le blocage d'abord, et lui seul : `ignoreUser` du SDK décline déjà les
+  /// invitations de la personne, puis écrit la liste de blocage. Refuser
+  /// avant (quitter puis oublier le salon) le faisait quitter une seconde
+  /// fois un salon oublié, attendre une confirmation qui ne viendra jamais,
+  /// et la liste n'était jamais écrite (essai du 2026-09-28).
+  Future<void> bloquerDemande(Room room) async {
+    final inviteur = inviteurDe(room);
+    if (inviteur == null) return refuserDemande(room);
+    await bloquerUtilisateur(inviteur);
+    try {
+      await room.forget();
+    } catch (_) {
+      // Déjà oublié, ou serveur injoignable : le blocage, lui, est fait.
+    }
   }
 
   /// Signale un message à l'administrateur du serveur.

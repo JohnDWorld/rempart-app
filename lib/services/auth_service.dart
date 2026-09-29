@@ -448,6 +448,18 @@ class AuthService {
       ),
     );
 
+    // Les bots de l'utilisateur sont connus d'office : leurs invitations
+    // s'acceptent seules (voir `MatrixService.definirMesBots`). En cas
+    // d'échec, elles arrivent en demande, ce qui reste acceptable.
+    unawaited(
+      BotGatewayService().myBots().then(
+            (liste) => MatrixService.instance
+                .definirMesBots(liste.bots.map((b) => b.mxid)),
+            onError: (Object e) =>
+                debugPrint('Mes bots indisponibles pour les invitations : $e'),
+          ),
+    );
+
     // Lie le mxid Matrix au compte Supabase, pour que BotFather sache à qui
     // appartiennent les bots.
     final mxid = MatrixService.instance.currentUserId;

@@ -8,6 +8,7 @@ import 'package:matrix/matrix.dart' as matrix;
 
 import '../../../app/theme.dart';
 import '../../../core/plateforme.dart';
+import '../../../core/utils/demandes.dart';
 import '../../../data/models/matrix_extensions.dart';
 import '../../../data/providers/mode_theme.dart';
 import '../../../data/providers/providers.dart';
@@ -679,6 +680,11 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen>
   /// INTERACTIONS restent adaptatives, la ou la convention compte vraiment.
   Widget _buildEcran(
       List<matrix.Room> rooms, bool isMatrixConnected, bool horsLigne) {
+    // Les demandes de message ouvrent la liste, sur une ligne : elles ne sont
+    // pas des conversations (on n'a pas rejoint), et chacune attend une
+    // décision qui se prend sur leur propre écran.
+    final demandes = ref.watch(demandesProvider);
+    final decalage = demandes.isEmpty ? 0 : 1;
     return Scaffold(
       appBar: AppBar(
         // Deux en-têtes pour deux usages. Sur un écran large, la marque
@@ -715,7 +721,7 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen>
           Expanded(
             child: !isMatrixConnected
                 ? _buildNotConnectedState(context)
-                : rooms.isEmpty
+                : rooms.isEmpty && demandes.isEmpty
                     ? _buildEmptyState(context)
                     : RefreshIndicator.adaptive(
                         onRefresh: _rafraichir,
@@ -726,7 +732,7 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen>
                           padding: EdgeInsets.only(
                             bottom: widget.deuxColonnes ? 16 : 96,
                           ),
-                          itemCount: rooms.length,
+                          itemCount: rooms.length + decalage,
                           // Filet encarté, aligné sur le texte : d'un bord à
                           // l'autre il découpe la page en tranches ; ici il ne
                           // fait que séparer deux lignes.
@@ -736,7 +742,17 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen>
                             endIndent: RempartTokens.espaceL,
                           ),
                           itemBuilder: (context, index) {
-                            final room = rooms[index];
+                            if (index < decalage) {
+                              return AdaptiveListTile(
+                                leading: const Icon(
+                                  Icons.mark_email_unread_outlined,
+                                ),
+                                title: Text(libelleDemandes(demandes.length)),
+                                trailing: Icon(Icons.adaptive.arrow_forward),
+                                onTap: () => context.push('/demandes'),
+                              );
+                            }
+                            final room = rooms[index - decalage];
                             return ConversationTile(
                               room: room,
                               onTap: () {

@@ -7,6 +7,7 @@ import 'package:vodozemac/vodozemac.dart' as vod;
 
 import '../../core/constants/matrix_constants.dart';
 import '../../core/utils/apercu_notification.dart';
+import '../../core/utils/demandes.dart';
 import '../models/matrix_extensions.dart';
 
 /// Va chercher le contenu réel d'un message annoncé par un push.
@@ -101,6 +102,18 @@ Future<ApercuNotification?> _apercuDuPush({
         texte: 'a réagi $symbole à votre message',
         nomExpediteur: await nomDeLExpediteurPourNotification(evenement),
         nomRoom: evenement.room.name.isEmpty ? null : evenement.room.name,
+      );
+    }
+
+    // Une invitation : l'isolate ne connaît pas « Mes bots », il annonce donc
+    // toute invitation comme une demande. Celle d'un connu sera acceptée dès
+    // que l'application tournera, sans rien coûter de plus qu'un avis.
+    if (evenement.type == EventTypes.RoomMember &&
+        evenement.content['membership'] == 'invite' &&
+        evenement.stateKey == client.userID) {
+      return apercuDemande(
+        nomInviteur: await nomDeLExpediteurPourNotification(evenement),
+        nomGroupe: evenement.room.name.isEmpty ? null : evenement.room.name,
       );
     }
 

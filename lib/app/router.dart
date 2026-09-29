@@ -18,6 +18,7 @@ import '../presentation/screens/chat/chat_screen.dart';
 import '../presentation/screens/chat/new_chat_screen.dart';
 import '../presentation/screens/chat/new_group_screen.dart';
 import '../presentation/screens/conversations/archived_conversations_screen.dart';
+import '../presentation/screens/conversations/demandes_screen.dart';
 import '../presentation/screens/legal/conditions_utilisation_screen.dart';
 import '../presentation/screens/legal/licences_screen.dart';
 import '../presentation/screens/legal/politique_confidentialite_screen.dart';
@@ -296,6 +297,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/archives',
         name: 'archives',
         builder: (context, state) => const ArchivedConversationsScreen(),
+      ),
+
+      // Demandes de message : invitations d'inconnus
+      GoRoute(
+        path: '/demandes',
+        name: 'demandes',
+        builder: (context, state) => const DemandesScreen(),
       ),
     ],
 

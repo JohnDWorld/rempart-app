@@ -191,6 +191,16 @@ final roomsProvider = Provider<List<matrix.Room>>((ref) {
   return _dedoublonnerChatsDirects(joinedRooms);
 });
 
+/// Invitations d'inconnus en attente de décision (voir
+/// `MatrixService.demandes`). Même battement que `roomsProvider` : une
+/// demande arrive par la synchronisation, et part par une action locale.
+final demandesProvider = Provider<List<matrix.Room>>((ref) {
+  ref
+    ..watch(matrixStateNotifierProvider)
+    ..watch(syncTickProvider);
+  return MatrixService.instance.demandes;
+});
+
 /// N'affiche qu'un fil par contact.
 ///
 /// Deux personnes qui s'écrivent simultanément, avant que l'invitation de

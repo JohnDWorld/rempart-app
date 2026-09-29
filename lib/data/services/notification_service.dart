@@ -6,8 +6,10 @@ import 'package:matrix/matrix.dart' as matrix;
 
 import '../../core/plateforme.dart';
 import '../../core/utils/apercu_notification.dart';
+import '../../core/utils/demandes.dart';
 import '../models/matrix_extensions.dart';
 import '../providers/contenu_notifications.dart';
+import 'matrix_service.dart';
 import 'presence_isolate.dart';
 import 'push_contenu.dart';
 
@@ -264,6 +266,28 @@ class NotificationService {
       // Rien à signaler pour la conversation déjà à l'écran.
       if (room.id == roomOuverte) return;
 
+      // Une invitation. D'un connu, elle est acceptée d'office et le message
+      // qui suivra notifiera : rien à dire. D'un inconnu, c'est une demande,
+      // annoncée sans rien de son contenu.
+      if (event.type == matrix.EventTypes.RoomMember &&
+          event.content['membership'] == 'invite' &&
+          event.stateKey == room.client.userID) {
+        if (MatrixService.instance.estConnu(event.senderId)) return;
+        if (!afficherContenu) {
+          await _afficherNeutre(room.id);
+          return;
+        }
+        await _afficher(
+          id: room.id.hashCode,
+          apercu: apercuDemande(
+            nomInviteur: await nomDeLExpediteurPourNotification(event),
+            nomGroupe: room.name.isEmpty ? null : room.name,
+          ),
+          roomId: room.id,
+        );
+        return;
+      }
+
       // Une réaction : à annoncer, mais seulement si elle vise un de nos
       // propres messages. Dans un groupe, relayer toutes celles que les
       // autres s'échangent ferait un vacarme dont personne ne veut.
@@ -309,10 +333,6 @@ class NotificationService {
 
   /// Texte du message, déchiffré si besoin.
   Future<String> _corps(matrix.Event event) async {
-    if (event.type == matrix.EventTypes.RoomMember) {
-      return 'Vous avez été invité à une conversation';
-    }
-
     var evenement = event;
     if (evenement.type == matrix.EventTypes.Encrypted) {
       // L'événement arrive chiffré : sans déchiffrement, le corps est vide.
