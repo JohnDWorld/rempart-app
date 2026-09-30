@@ -569,6 +569,9 @@ class _MessageInputState extends State<MessageInput> {
                                       ? widget.onAttachmentPressed
                                       : null,
                                   icon: const Icon(Icons.attach_file),
+                                  // Sans lui, un lecteur d'écran annonçait un
+                                  // bouton sans nom.
+                                  tooltip: 'Joindre une photo ou un fichier',
                                   color: colorScheme.onSurfaceVariant,
                                   constraints: _tailleBouton,
                                   padding: EdgeInsets.zero,

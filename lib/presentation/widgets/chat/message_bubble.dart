@@ -676,11 +676,17 @@ class _VideoJointeState extends State<_VideoJointe> {
     _charger();
   }
 
-  // Même raison que pour les images : l'état survit au décalage du fil.
+  // Même raison que pour les images : l'état survit au décalage du fil. Et
+  // chez l'expéditeur, la vidéo naît sans vignette (écho local) et ne la
+  // reçoit qu'une fois l'envoi abouti : sans ce second cas, elle restait sur
+  // son fond sombre jusqu'à la réouverture de la conversation.
   @override
   void didUpdateWidget(_VideoJointe ancien) {
     super.didUpdateWidget(ancien);
-    if (cleMedia(ancien.event) != cleMedia(widget.event)) _charger();
+    if (cleMedia(ancien.event) != cleMedia(widget.event) ||
+        ancien.event.hasThumbnail != widget.event.hasThumbnail) {
+      _charger();
+    }
   }
 
   void _charger() {

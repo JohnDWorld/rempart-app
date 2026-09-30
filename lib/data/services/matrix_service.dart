@@ -13,6 +13,7 @@ import '../../core/plateforme.dart';
 import '../../core/utils/demandes.dart';
 import '../../core/utils/dimensions_image.dart';
 import '../models/matrix_extensions.dart';
+import 'analyse_video.dart';
 import 'client_rempart.dart';
 import 'enregistrement_photos.dart';
 import 'notification_service.dart';
@@ -1577,9 +1578,46 @@ class MatrixService {
       if (texte.isNotEmpty) 'body': texte,
       if (albumId != null) 'fr.rempart.album': {'id': albumId},
     };
+    final (aEnvoyer, vignette) = await _preparerMedia(file);
     return room.sendFileEvent(
-      await _avecDimensions(file),
+      aEnvoyer,
+      thumbnail: vignette,
       extraContent: extra.isEmpty ? null : extra,
+    );
+  }
+
+  /// Le média tel qu'il doit partir, et la vignette d'une vidéo.
+  ///
+  /// Une vidéo partait nue : ni vignette, ni durée, ni format. Le
+  /// destinataire ne voyait qu'un fond sombre avec un bouton de lecture, sans
+  /// savoir ce qu'elle montrait ni combien de temps elle durait. Le SDK
+  /// chiffre et téléverse la vignette avec la vidéo (`thumbnail_file`).
+  Future<(MatrixFile, MatrixImageFile?)> _preparerMedia(MatrixFile file) async {
+    if (file is! MatrixVideoFile || file.duration != null) {
+      return (await _avecDimensions(file), null);
+    }
+    final analyse = await analyserVideo(file.bytes);
+    if (analyse == null) return (file, null);
+    final vignette = analyse.vignette;
+    final dimensions = vignette == null ? null : await dimensionsImage(vignette);
+    return (
+      MatrixVideoFile(
+        bytes: file.bytes,
+        name: file.name,
+        mimeType: file.mimeType,
+        width: analyse.largeur,
+        height: analyse.hauteur,
+        duration: analyse.dureeMs,
+      ),
+      vignette == null
+          ? null
+          : MatrixImageFile(
+              bytes: vignette,
+              name: 'vignette.jpg',
+              mimeType: 'image/jpeg',
+              width: dimensions?.$1,
+              height: dimensions?.$2,
+            ),
     );
   }
 

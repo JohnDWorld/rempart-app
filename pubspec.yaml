@@ -1,7 +1,7 @@
 name: rempart_app
 description: Rempart - Messagerie souveraine avec chiffrement E2E
 publish_to: 'none'
-version: 1.0.0+87
+version: 1.0.0+88
 environment:
   sdk: '>=3.3.0 <4.0.0'
 
@@ -99,6 +99,8 @@ dependencies:
   # Lecture des videos dans la conversation. `web` sert a la version
   # navigateur, ou la video dechiffree passe par un lien en memoire (Blob).
   video_player: ^2.14.0
+  # Vignette d'une video a l'envoi, par les outils natifs (sans FFmpeg).
+  fc_native_video_thumbnail: ^3.0.1
   web: ^1.1.1
 
   # ===========================================
