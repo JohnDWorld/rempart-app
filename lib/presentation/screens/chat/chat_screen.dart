@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:file_picker/file_picker.dart';
@@ -814,27 +815,27 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
   }
 
-  /// Ouvre une image en plein écran.
+  /// Ouvre une image en plein écran, et avec elle le reste de son [album],
+  /// qui se parcourt d'un glissement.
   ///
-  /// Le déchiffrement passe par la même route que la bulle : on ne peut pas
-  /// réutiliser l'image déjà affichée, celle-ci vivant dans un widget enfant.
-  Future<void> _ouvrirImage(matrix.Event event) async {
-    try {
-      final fichier = await event.downloadAndDecryptAttachment();
-      if (!mounted) return;
-      await Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (context) => VisionneuseImage(
-            octets: fichier.bytes,
-            event: event,
-            onEnregistrer: () => _enregistrerPieceJointe(event),
-            onPartager: () => _partagerPieceJointe(event),
-          ),
+  /// La visionneuse charge elle-même ses images, depuis la mémoire quand la
+  /// vignette les y a déjà mises : elle s'ouvre sans attendre.
+  Future<void> _ouvrirImage(
+    matrix.Event event, {
+    List<matrix.Event>? album,
+  }) async {
+    // Le fil va du plus récent au plus ancien ; la visionneuse suit l'envoi.
+    final images = (album ?? [event]).reversed.toList();
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => VisionneuseImage(
+          images: images,
+          depart: math.max(0, images.indexOf(event)),
+          onEnregistrer: _enregistrerPieceJointe,
+          onPartager: _partagerPieceJointe,
         ),
-      );
-    } catch (e) {
-      _signaler("Impossible d'ouvrir l'image : $e");
-    }
+      ),
+    );
   }
 
   Future<void> _partagerPieceJointe(matrix.Event event) async {
@@ -1592,6 +1593,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                                     final brute = MessageBubble(
                                       event: event,
                                       album: groupe.length > 1 ? groupe : null,
+                                      // Chaque photo d'un album s'ouvre sur
+                                      // elle-même ; en recherche, l'appui
+                                      // remonte à la bulle, qui ramène au
+                                      // message.
+                                      onOuvrirImage: _isSearching
+                                          ? null
+                                          : (image) => _ouvrirImage(
+                                                image,
+                                                album: groupe,
+                                              ),
                                       timeline: _timeline,
                                       isMine: isMine,
                                       onReagir: (symbole) =>
@@ -1605,7 +1616,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                                       onTap: _isSearching
                                           ? () => _sauterAuMessage(event)
                                           : (event.isImageMessage
-                                              ? () => _ouvrirImage(event)
+                                              ? () => _ouvrirImage(
+                                                    groupe.last,
+                                                    album: groupe.length > 1
+                                                        ? groupe
+                                                        : null,
+                                                  )
                                               : null),
                                       onLongPress: () =>
                                           _showMessageOptions(event),

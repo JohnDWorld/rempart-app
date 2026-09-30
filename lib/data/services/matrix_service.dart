@@ -11,8 +11,10 @@ import 'package:vodozemac/vodozemac.dart' as vod;
 import '../../core/constants/matrix_constants.dart';
 import '../../core/plateforme.dart';
 import '../../core/utils/demandes.dart';
+import '../../core/utils/dimensions_image.dart';
 import '../models/matrix_extensions.dart';
 import 'client_rempart.dart';
+import 'enregistrement_photos.dart';
 import 'notification_service.dart';
 
 /// Service pour la gestion de la connexion et des opérations Matrix
@@ -152,6 +154,8 @@ class MatrixService {
     final client = _client;
     if (client != null) {
       unawaited(NotificationService.instance.ecouter(client));
+      // Photos reçues vers la galerie, si l'utilisateur l'a demandé.
+      unawaited(EnregistrementPhotos.instance.ecouter(client));
     }
   }
 
@@ -1574,8 +1578,27 @@ class MatrixService {
       if (albumId != null) 'fr.rempart.album': {'id': albumId},
     };
     return room.sendFileEvent(
-      file,
+      await _avecDimensions(file),
       extraContent: extra.isEmpty ? null : extra,
+    );
+  }
+
+  /// La photo, avec sa largeur et sa hauteur (`info.w`, `info.h`).
+  ///
+  /// Le SDK ne les calcule qu'avec des implémentations natives, que Rempart
+  /// ne fournit pas : nos photos partaient sans, et chaque destinataire
+  /// réservait une place au hasard, que l'arrivée de l'image redimensionnait
+  /// sous ses yeux. L'en-tête suffit à les lire, sans décoder l'image.
+  Future<MatrixFile> _avecDimensions(MatrixFile file) async {
+    if (file is! MatrixImageFile || file.width != null) return file;
+    final dimensions = await dimensionsImage(file.bytes);
+    if (dimensions == null) return file;
+    return MatrixImageFile(
+      bytes: file.bytes,
+      name: file.name,
+      mimeType: file.mimeType,
+      width: dimensions.$1,
+      height: dimensions.$2,
     );
   }
 

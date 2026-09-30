@@ -16,6 +16,7 @@ import '../../../core/utils/secret_message.dart';
 import '../../../data/models/matrix_extensions.dart';
 import '../../../data/providers/taille_texte.dart';
 import '../../../data/providers/vitesse_vocal.dart';
+import '../../../data/services/cache_medias.dart';
 import '../../../data/services/matrix_service.dart';
 import '../common/user_avatar.dart';
 import 'message_riche.dart';
@@ -34,6 +35,7 @@ class MessageBubble extends ConsumerWidget {
     this.onReagir,
     this.onBouton,
     this.album,
+    this.onOuvrirImage,
     this.highlighted = false,
   });
 
@@ -58,6 +60,10 @@ class MessageBubble extends ConsumerWidget {
   /// Quinze photos partagées ensemble remplissaient quinze bulles et toute la
   /// hauteur du fil ; elles tiennent ici dans une grille.
   final List<matrix.Event>? album;
+
+  /// Appui sur une photo d'un [album] : ouvre la visionneuse sur elle. Sans
+  /// lui, l'appui remonte à la bulle ([onTap]).
+  final void Function(matrix.Event image)? onOuvrirImage;
 
   final bool isMine;
   final bool showAvatar;
@@ -92,7 +98,12 @@ class MessageBubble extends ConsumerWidget {
     final affiche = timeline == null ? event : event.getDisplayEvent(timeline);
     final modifie = timeline != null && event.aEteModifie(timeline);
     final lu = isMine && event.luParUnAutre;
-    final legende = affiche.legendePieceJointe;
+    // La légende d'un album est posée sur la PREMIÈRE photo envoyée, alors
+    // que la bulle est portée par la dernière arrivée : on la cherche dans
+    // tout le groupe, sans quoi elle ne s'affichait jamais.
+    final legende = [
+      for (final media in album ?? [affiche]) media.legendePieceJointe,
+    ].nonNulls.firstOrNull;
 
     return AnimatedContainer(
       duration: dureeAnimation(context, const Duration(milliseconds: 300)),
@@ -415,7 +426,7 @@ class MessageBubble extends ConsumerWidget {
 
     final groupe = album;
     if (groupe != null && groupe.length > 1) {
-      return _GrilleAlbum(evenements: groupe);
+      return _GrilleAlbum(evenements: groupe, onOuvrir: onOuvrirImage);
     }
 
     if (affiche.isImageMessage) {
@@ -512,13 +523,9 @@ class MessageBubble extends ConsumerWidget {
 /// Dans une room chiffrée, le média est chiffré côté serveur : son URL HTTP
 /// brute ne renvoie que du chiffré, illisible par `Image.network` (vignette
 /// bloquée sur son indicateur de chargement). On passe donc par
-/// `downloadAndDecryptAttachment`, qui vaut aussi pour les rooms en clair.
-///
-/// Widget à état pour ne télécharger qu'une fois : la bulle est reconstruite à
-/// chaque mise à jour de la timeline, un FutureBuilder relancerait la
-/// récupération à chaque build.
+/// `chargerImage`, qui déchiffre et garde le résultat en mémoire.
 class _ImageJointe extends StatefulWidget {
-  const _ImageJointe({required this.event, this.enGrille = false});
+  const _ImageJointe({required this.event, this.enGrille = false, super.key});
 
   final matrix.Event event;
 
@@ -532,62 +539,80 @@ class _ImageJointe extends StatefulWidget {
 }
 
 class _ImageJointeState extends State<_ImageJointe> {
-  Uint8List? _octets;
+  MediaCharge? _media;
   bool _echec = false;
 
   @override
   void initState() {
     super.initState();
-    unawaited(_charger());
+    _charger();
   }
 
-  Future<void> _charger() async {
-    try {
-      final fichier = await widget.event.downloadAndDecryptAttachment();
-      if (mounted) {
-        setState(() => _octets = fichier.bytes);
-      }
-    } catch (e) {
-      debugPrint('MessageBubble: image non récupérée ($e)');
-      if (mounted) {
-        setState(() => _echec = true);
-      }
+  /// Un état de widget survit quand le fil se décale : une nouvelle photo
+  /// arrivée en tête de liste redonne à chaque vignette l'événement de sa
+  /// voisine. Charger une seule fois, à la création, laissait donc chaque
+  /// vignette sur l'image d'avant, d'où la même photo répétée dans un album
+  /// jusqu'à la réouverture de la conversation.
+  @override
+  void didUpdateWidget(_ImageJointe ancien) {
+    super.didUpdateWidget(ancien);
+    if (cleMedia(ancien.event) != cleMedia(widget.event)) {
+      _echec = false;
+      _charger();
     }
+  }
+
+  void _charger() {
+    final cle = cleMedia(widget.event);
+    // Déjà en mémoire : affichée dès la première image, sans indicateur.
+    _media = CacheMedias.instance.deja(cle);
+    if (_media != null) return;
+    unawaited(
+      chargerImage(widget.event).then(
+        (media) {
+          if (mounted && cleMedia(widget.event) == cle) {
+            setState(() => _media = media);
+          }
+        },
+        onError: (Object e) {
+          debugPrint('MessageBubble: image non récupérée ($e)');
+          if (mounted && cleMedia(widget.event) == cle) {
+            setState(() => _echec = true);
+          }
+        },
+      ),
+    );
+  }
+
+  /// Proportions de la place réservée : celles de l'image dès qu'on les
+  /// connaît, sinon celles qu'annonce le message. Réserver la bonne forme
+  /// avant l'arrivée de l'image évite que le fil ne saute à chaque photo
+  /// chargée. Bornées : un panorama deviendrait un fil, une capture d'écran
+  /// une colonne.
+  double _ratio() {
+    final ratio = _media?.ratio ?? _ratioAnnonce(widget.event) ?? 4 / 3;
+    return ratio.clamp(9 / 16, 1.91);
   }
 
   @override
   Widget build(BuildContext context) {
+    final fond = Theme.of(context).colorScheme.surfaceContainerHighest;
+    final media = _media;
+    final Widget contenu;
     if (_echec) {
-      return Container(
-        height: 150,
-        width: double.infinity,
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: const Icon(Icons.broken_image, size: 48),
+      contenu = ColoredBox(
+        color: fond,
+        child: const Center(child: Icon(Icons.broken_image, size: 48)),
       );
-    }
-
-    final octets = _octets;
-    if (octets == null) {
-      return Container(
-        height: 150,
-        width: double.infinity,
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(8),
-        ),
+    } else if (media == null) {
+      contenu = ColoredBox(
+        color: fond,
         child: const Center(child: CircularProgressIndicator.adaptive()),
       );
-    }
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(widget.enGrille ? 4 : 8),
-      child: Image.memory(
-        octets,
+    } else {
+      contenu = Image.memory(
+        media.octets,
         fit: BoxFit.cover,
-        width: double.infinity,
         // Décodée à la taille où elle s'affiche, et non à celle du capteur :
         // une photo de 12 Mpx occupait environ 48 Mo en mémoire pour une
         // vignette de 280 points, et un fil chargé de photos faisait saccader
@@ -598,14 +623,35 @@ class _ImageJointeState extends State<_ImageJointe> {
         cacheWidth:
             (_largeurBulle(context) * MediaQuery.devicePixelRatioOf(context))
                 .round(),
-        errorBuilder: (context, error, stack) => Container(
-          height: 150,
-          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-          child: const Icon(Icons.broken_image, size: 48),
+        // Le décodage prend une image de retard : sans ce fond, la case
+        // clignotait du gris au vide avant de montrer la photo.
+        frameBuilder: (context, enfant, image, synchrone) =>
+            image == null ? ColoredBox(color: fond) : enfant,
+        errorBuilder: (context, error, stack) => ColoredBox(
+          color: fond,
+          child: const Center(child: Icon(Icons.broken_image, size: 48)),
         ),
-      ),
+      );
+    }
+
+    // En mosaïque, la case donne déjà la forme.
+    if (widget.enGrille) return contenu;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: AspectRatio(aspectRatio: _ratio(), child: contenu),
     );
   }
+}
+
+/// Largeur sur hauteur annoncées par le message (`info.w` et `info.h`), si
+/// l'expéditeur les a données.
+double? _ratioAnnonce(matrix.Event event) {
+  final info = event.content['info'];
+  if (info is! Map) return null;
+  final w = info['w'];
+  final h = info['h'];
+  if (w is! num || h is! num || w <= 0 || h <= 0) return null;
+  return w / h;
 }
 
 /// Enveloppe un contenu d'un voile qui se lève au toucher.
@@ -1341,22 +1387,27 @@ class _FormeOnde extends CustomPainter {
 
 /// Les médias d'un même envoi, en mosaïque.
 ///
-/// Deux par ligne, comme sur les autres messageries : au-delà, une photo de
-/// téléphone devient une vignette qu'on ne reconnaît plus. Le dernier d'un
-/// nombre impair prend toute la largeur, ce qui évite un trou à droite.
+/// Deux par ligne, quatre cases au plus, le nombre des autres posé sur la
+/// dernière : au-delà, une photo de téléphone devient une vignette qu'on ne
+/// reconnaît plus, et vingt photos en mosaïque ne se regardent pas, elles se
+/// parcourent (dans la visionneuse). Pour un nombre impair, la dernière prend
+/// toute la largeur, en bandeau, ce qui évite un trou à droite.
 class _GrilleAlbum extends StatelessWidget {
-  const _GrilleAlbum({required this.evenements});
+  const _GrilleAlbum({required this.evenements, this.onOuvrir});
 
+  /// Du plus récent au plus ancien, dans l'ordre du fil.
   final List<matrix.Event> evenements;
 
-  /// Au-delà, on n'affiche plus : la grille dirait « +7 » sur la dernière
-  /// case. Vingt photos en mosaïque ne se regardent pas, elles se parcourent.
-  static const _maxVisibles = 6;
+  final void Function(matrix.Event image)? onOuvrir;
+
+  static const _maxVisibles = 4;
 
   @override
   Widget build(BuildContext context) {
-    final visibles = evenements.take(_maxVisibles).toList();
-    final restants = evenements.length - visibles.length;
+    // Dans l'ordre de l'envoi : la première photo choisie en haut à gauche.
+    final ordre = evenements.reversed.toList();
+    final visibles = ordre.take(_maxVisibles).toList();
+    final restants = ordre.length - visibles.length;
 
     final lignes = <List<matrix.Event>>[];
     for (var i = 0; i < visibles.length; i += 2) {
@@ -1370,36 +1421,47 @@ class _GrilleAlbum extends StatelessWidget {
         children: [
           for (final ligne in lignes)
             Padding(
-              padding: const EdgeInsets.only(bottom: 3),
+              padding: EdgeInsets.only(bottom: ligne == lignes.last ? 0 : 3),
               child: Row(
                 children: [
                   for (final evenement in ligne) ...[
                     Expanded(
                       child: AspectRatio(
-                        aspectRatio: 1,
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            _ImageJointe(event: evenement, enGrille: true),
-                            // Le compte des non-affichées se pose sur la
-                            // dernière case visible, pas à côté : c'est là
-                            // qu'on le cherche.
-                            if (restants > 0 &&
-                                evenement == visibles.last)
-                              ColoredBox(
-                                color: Colors.black.withValues(alpha: 0.45),
-                                child: Center(
-                                  child: Text(
-                                    '+$restants',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.w600,
+                        aspectRatio: ligne.length == 1 ? 2 : 1,
+                        child: GestureDetector(
+                          onTap: onOuvrir == null
+                              ? null
+                              : () => onOuvrir!(evenement),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                // Une clé par média : sans elle, une photo
+                                // arrivée en cours de route redistribuait les
+                                // vignettes entre les cases.
+                                _ImageJointe(
+                                  key: ValueKey(cleMedia(evenement)),
+                                  event: evenement,
+                                  enGrille: true,
+                                ),
+                                if (restants > 0 && evenement == visibles.last)
+                                  ColoredBox(
+                                    color: Colors.black.withValues(alpha: 0.55),
+                                    child: Center(
+                                      child: Text(
+                                        '+$restants',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 24,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
                                     ),
                                   ),
-                                ),
-                              ),
-                          ],
+                              ],
+                            ),
+                          ),
                         ),
                       ),
                     ),

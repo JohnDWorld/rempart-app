@@ -11,10 +11,12 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/plateforme.dart';
 import '../../../data/providers/contenu_notifications.dart';
 import '../../../data/providers/providers.dart';
+import '../../../data/services/enregistrement_photos.dart';
 import '../../../data/services/notification_service.dart';
 import '../../../services/auth_service.dart';
 import '../../widgets/adaptive/adaptive.dart';
 import '../../widgets/common/user_avatar.dart';
+import '../../widgets/settings/enregistrement_photos_tile.dart';
 import '../../widgets/settings/mise_a_jour.dart';
 import '../../widgets/settings/push_mode_tile.dart';
 import '../../widgets/settings/soutien.dart';
@@ -156,6 +158,15 @@ class SettingsScreen extends ConsumerWidget {
                 ),
               ],
             ),
+
+            // Section Médias
+            if (EnregistrementPhotos.disponible)
+              CupertinoListSection.insetGrouped(
+                backgroundColor: Colors.transparent,
+                decoration: _decorationSection(context),
+                header: const Text('MÉDIAS'),
+                children: const [EnregistrementPhotosTile(cupertino: true)],
+              ),
 
             // Section Notifications
             CupertinoListSection.insetGrouped(
@@ -508,6 +519,13 @@ class SettingsScreen extends ConsumerWidget {
           ),
 
           const Divider(),
+
+          // Section Médias
+          if (EnregistrementPhotos.disponible) ...[
+            _buildSectionHeader(context, 'Médias'),
+            const EnregistrementPhotosTile(),
+            const Divider(),
+          ],
 
           // Section Notifications
           _buildSectionHeader(context, 'Notifications'),
