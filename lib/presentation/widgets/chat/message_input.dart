@@ -27,6 +27,7 @@ class MessageInput extends StatefulWidget {
     this.room,
     this.onVocal,
     this.enabled = true,
+    this.texteInitial,
   });
 
   final Function(String message) onSend;
@@ -49,6 +50,10 @@ class MessageInput extends StatefulWidget {
   final void Function(VocalEnregistre vocal)? onVocal;
 
   final bool enabled;
+
+  /// Texte déjà dans le champ à l'ouverture : un lien partagé depuis une
+  /// autre application, à compléter avant de l'envoyer.
+  final String? texteInitial;
 
   @override
   State<MessageInput> createState() => _MessageInputState();
@@ -78,11 +83,11 @@ class MessageInput extends StatefulWidget {
 const _tailleBouton = BoxConstraints(minWidth: 40, minHeight: 48);
 
 class _MessageInputState extends State<MessageInput> {
-  final _controller = TextEditingController();
+  late final _controller = TextEditingController(text: widget.texteInitial);
   // Le nœud porte lui-même l'écoute du clavier : un `Focus` autour du champ
   // ferait la même chose en ajoutant un cran d'imbrication.
   late final _focusNode = FocusNode()..onKeyEvent = _surToucheClavier;
-  bool _hasText = false;
+  late bool _hasText = widget.texteInitial?.trim().isNotEmpty ?? false;
 
   /// Extinction automatique : sans elle, quitter le champ sans envoyer
   /// laisserait le contact devant un « en train d'écrire » perpétuel.

@@ -53,7 +53,7 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:launchMode="singleTop"
+            android:launchMode="singleTask"
             android:taskAffinity=""
             android:theme="@style/LaunchTheme"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
@@ -81,6 +81,21 @@
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
                 <data android:scheme="fr.rempart-messenger.app"/>
+            </intent-filter>
+            <!-- Destination de « Partager » dans les autres applications :
+                 photos, videos, fichiers, un ou plusieurs, et le texte (liens).
+                 Recu par Partage.kt. `singleTask` ci-dessus est indispensable :
+                 en `singleTop`, Android ouvrait une seconde copie de Rempart
+                 dans la tache de l'application qui partage. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="*/*"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="*/*"/>
             </intent-filter>
             <!-- Ces liens sont pour Supabase seul, qui les lit lui-meme. Laisse
                  actif, le relais de Flutter les transmettait AUSSI au routeur,

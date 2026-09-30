@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../data/services/partage_entrant.dart';
 import '../presentation/screens/accueil_screen.dart';
 import '../presentation/screens/auth/connexion_qr_screen.dart';
 import '../presentation/screens/auth/login_screen.dart';
@@ -19,6 +20,7 @@ import '../presentation/screens/chat/new_chat_screen.dart';
 import '../presentation/screens/chat/new_group_screen.dart';
 import '../presentation/screens/conversations/archived_conversations_screen.dart';
 import '../presentation/screens/conversations/demandes_screen.dart';
+import '../presentation/screens/conversations/partager_screen.dart';
 import '../presentation/screens/legal/conditions_utilisation_screen.dart';
 import '../presentation/screens/legal/licences_screen.dart';
 import '../presentation/screens/legal/politique_confidentialite_screen.dart';
@@ -166,7 +168,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         name: 'chat',
         builder: (context, state) {
           final conversationId = state.pathParameters['conversationId']!;
-          return ChatScreen(conversationId: conversationId);
+          return ChatScreen(
+            conversationId: conversationId,
+            partage: state.extra as Partage?,
+          );
         },
       ),
 
@@ -297,6 +302,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/archives',
         name: 'archives',
         builder: (context, state) => const ArchivedConversationsScreen(),
+      ),
+
+      // « Envoyer à… » : ce qu'une autre application vient de partager
+      GoRoute(
+        path: '/partager',
+        name: 'partager',
+        builder: (context, state) => const PartagerScreen(),
       ),
 
       // Demandes de message : invitations d'inconnus

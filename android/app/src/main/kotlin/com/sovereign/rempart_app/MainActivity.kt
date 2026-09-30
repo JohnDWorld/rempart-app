@@ -26,6 +26,9 @@ class MainActivity : FlutterActivity() {
 
     private val canal = "rempart/maj"
 
+    /** Previent Flutter qu'un partage vient d'arriver, application ouverte. */
+    private var canalPartage: MethodChannel? = null
+
     /**
      * Clavier fantome : au retour dans l'application, un espace vide de la
      * hauteur du clavier restait en bas de TOUS les ecrans, clavier ferme.
@@ -49,6 +52,9 @@ class MainActivity : FlutterActivity() {
      * Sans effet quand tout va bien : les marges sont deja celles-la.
      */
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Lancee par « Partager » depuis une autre application : Flutter
+        // viendra le chercher une fois demarre.
+        Partage.retenir(intent)
         super.onCreate(savedInstanceState)
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
         val vue = findViewById<View>(FlutterActivity.FLUTTER_VIEW_ID) ?: return
@@ -72,6 +78,17 @@ class MainActivity : FlutterActivity() {
         )
     }
 
+    /**
+     * Partage recu application ouverte. `singleTask` (voir le manifeste) le
+     * fait arriver ici, dans l'activite existante, au lieu d'ouvrir une
+     * seconde copie de Rempart dans la tache de l'application qui partage :
+     * deux moteurs Flutter, donc deux clients Matrix sur la meme base.
+     */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        if (Partage.retenir(intent)) canalPartage?.invokeMethod("nouveau", null)
+    }
+
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (!hasFocus || Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
@@ -89,6 +106,24 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(engine: FlutterEngine) {
         super.configureFlutterEngine(engine)
+        canalPartage = MethodChannel(engine.dartExecutor.binaryMessenger, "rempart/partage").apply {
+            setMethodCallHandler { appel, reponse ->
+                if (appel.method != "prendre") {
+                    reponse.notImplemented()
+                    return@setMethodCallHandler
+                }
+                // Copie de fichiers, parfois lourds (une video) : hors du fil
+                // principal, qui gelerait l'ecran le temps de la copie.
+                Thread {
+                    val partage = try {
+                        Partage.prendre(applicationContext)
+                    } catch (e: Exception) {
+                        null
+                    }
+                    runOnUiThread { reponse.success(partage) }
+                }.start()
+            }
+        }
         MethodChannel(engine.dartExecutor.binaryMessenger, canal).setMethodCallHandler {
             appel, reponse ->
             when (appel.method) {

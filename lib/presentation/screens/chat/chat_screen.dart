@@ -26,6 +26,7 @@ import '../../../data/providers/providers.dart';
 import '../../../data/services/compression_image.dart';
 import '../../../data/services/enregistreur_vocal.dart';
 import '../../../data/services/notification_service.dart';
+import '../../../data/services/partage_entrant.dart';
 import '../../../data/services/reinitialisation_e2e.dart';
 import '../../widgets/adaptive/adaptive.dart';
 import '../../widgets/chat/glisser_pour_repondre.dart';
@@ -54,10 +55,16 @@ class ChatScreen extends ConsumerStatefulWidget {
   const ChatScreen({
     required this.conversationId,
     this.enPanneau = false,
+    this.partage,
     super.key,
   });
 
   final String conversationId;
+
+  /// Ce qu'une autre application vient de partager vers cette conversation
+  /// (voir `PartagerScreen`) : les fichiers ouvrent l'aperçu d'envoi, un
+  /// texte seul attend dans la barre de saisie.
+  final Partage? partage;
 
   /// Vrai quand l'écran occupe le panneau de droite, à côté de la liste, et
   /// non toute la fenêtre : le retour ferme alors la conversation au lieu de
@@ -109,6 +116,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     NotificationService.instance.roomOuverte = widget.conversationId;
     _itemPositionsListener.itemPositions.addListener(_surDefilement);
     _initTimeline();
+    if (widget.partage case final partage?) {
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) => _accueillirPartage(partage));
+    }
   }
 
   @override
@@ -469,17 +480,39 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     try {
       final fichiers = await _selectionner(source);
       if (fichiers.isEmpty || !mounted) return;
-      // Légende AVANT l'envoi : joindre une image sans pouvoir dire ce qu'on en
-      // attend obligeait à écrire un second message, que le destinataire
-      // rattachait de tête. C'est aussi là que se décide la qualité.
-      final limite = await ref.read(matrixServiceProvider).limiteEnvoi();
-      if (!mounted) return;
-      final choix = await _demanderLegende(fichiers, limite);
-      if (choix == null || !mounted) return;
-      await _envoyerPiecesJointes(fichiers, choix);
+      await _proposerEnvoi(fichiers);
     } catch (e) {
       _signaler('Impossible de joindre le fichier : $e');
     }
+  }
+
+  /// Ce qu'une autre application a partagé : même aperçu, même envoi qu'une
+  /// pièce jointe choisie ici. Le texte qui accompagne des fichiers en devient
+  /// la légende ; seul, il attend dans la barre de saisie.
+  Future<void> _accueillirPartage(Partage partage) async {
+    if (partage.fichiers.isEmpty) return;
+    try {
+      final fichiers = await partage.versMatrixFiles();
+      if (!mounted) return;
+      await _proposerEnvoi(fichiers, legende: partage.texte);
+    } catch (e) {
+      _signaler('Impossible de joindre le fichier : $e');
+    }
+  }
+
+  /// Aperçu, légende et qualité, puis envoi.
+  Future<void> _proposerEnvoi(
+    List<matrix.MatrixFile> fichiers, {
+    String? legende,
+  }) async {
+    // Légende AVANT l'envoi : joindre une image sans pouvoir dire ce qu'on en
+    // attend obligeait à écrire un second message, que le destinataire
+    // rattachait de tête. C'est aussi là que se décide la qualité.
+    final limite = await ref.read(matrixServiceProvider).limiteEnvoi();
+    if (!mounted) return;
+    final choix = await _demanderLegende(fichiers, limite, legende: legende);
+    if (choix == null || !mounted) return;
+    await _envoyerPiecesJointes(fichiers, choix);
   }
 
   Future<_SourcePieceJointe?> _demanderSourceMaterial() {
@@ -608,14 +641,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   /// Renvoie la légende (éventuellement vide) ou null si l'utilisateur renonce.
   Future<_ChoixEnvoi?> _demanderLegende(
     List<matrix.MatrixFile> fichiers,
-    int? limiteEnvoi,
-  ) {
+    int? limiteEnvoi, {
+    String? legende,
+  }) {
     return feuilleAdaptative<_ChoixEnvoi>(
       context: context,
       isScrollControlled: true,
       builder: (context) => _FeuilleLegende(
         fichiers: fichiers,
         limiteEnvoi: limiteEnvoi,
+        legende: legende,
       ),
     );
   }
@@ -1518,7 +1553,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     // Liste des messages
                     Expanded(
                       child: _timeline == null
-                          ? const Center(child: CircularProgressIndicator.adaptive())
+                          ? const Center(
+                              child: CircularProgressIndicator.adaptive())
                           : events.isEmpty
                               ? (_isSearching
                                   ? _buildAucunResultat(context)
@@ -1625,6 +1661,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         onTyping: _signalerSaisie,
                         room: room,
                         onVocal: _envoyerVocal,
+                        texteInitial: widget.partage?.fichiers.isEmpty ?? false
+                            ? widget.partage?.texte
+                            : null,
                       ),
                   ],
                 ),
@@ -2186,9 +2225,16 @@ class _ChoixEnvoi {
 
 /// Aperçu des médias choisis, légende commune, et choix de la qualité.
 class _FeuilleLegende extends StatefulWidget {
-  const _FeuilleLegende({required this.fichiers, this.limiteEnvoi});
+  const _FeuilleLegende({
+    required this.fichiers,
+    this.limiteEnvoi,
+    this.legende,
+  });
 
   final List<matrix.MatrixFile> fichiers;
+
+  /// Légende proposée d'office (le texte joint à un partage).
+  final String? legende;
 
   /// Taille maximale acceptée par le serveur, si elle est connue. Une vidéo
   /// au-dessus est refusée à l'envoi, et rien ne le disait avant d'essayer.
@@ -2199,7 +2245,7 @@ class _FeuilleLegende extends StatefulWidget {
 }
 
 class _FeuilleLegendeState extends State<_FeuilleLegende> {
-  final _controller = TextEditingController();
+  late final _controller = TextEditingController(text: widget.legende);
   bool _hd = false;
 
   @override

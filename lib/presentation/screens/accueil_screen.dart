@@ -4,11 +4,13 @@ import 'dart:ui';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../app/theme.dart';
 import '../../core/mouvement.dart';
 import '../../core/plateforme.dart';
 import '../../data/providers/providers.dart';
+import '../../data/services/partage_entrant.dart';
 import '../../data/services/update_service.dart';
 import '../widgets/settings/mise_a_jour.dart';
 import 'chat/chat_screen.dart';
@@ -51,12 +53,25 @@ class _AccueilScreenState extends State<AccueilScreen>
     // certitude : l'application tourne, donc sa version a bien ete installee.
     unawaited(UpdateService.instance.purgerAnciens());
     _verifierMiseAJour();
+    // Un partage venu d'une autre application attend l'accueil : c'est le
+    // seul écran qui garantit une session ouverte, et le partage a pu lancer
+    // l'application lui-même, avant toute connexion.
+    PartageEntrant.instance.enAttente.addListener(_ouvrirPartage);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _ouvrirPartage());
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    PartageEntrant.instance.enAttente.removeListener(_ouvrirPartage);
     super.dispose();
+  }
+
+  // ponytail: un second partage arrivé pendant le choix empile un second
+  // « Envoyer à… » ; à éviter par un drapeau si ça se voit à l'usage.
+  void _ouvrirPartage() {
+    if (!mounted || PartageEntrant.instance.enAttente.value == null) return;
+    unawaited(GoRouter.of(context).push('/partager'));
   }
 
   @override

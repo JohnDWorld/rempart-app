@@ -20,6 +20,7 @@ import 'data/providers/contenu_notifications.dart';
 import 'data/providers/mode_theme.dart';
 import 'data/providers/taille_texte.dart';
 import 'data/services/notification_service.dart';
+import 'data/services/partage_entrant.dart';
 import 'data/services/presence_isolate.dart';
 import 'data/services/push_service.dart';
 
@@ -82,6 +83,11 @@ Future<void> _demarrer(List<String> args) async {
   );
 
   _ecouterReinitialisation();
+
+  // Photos, fichiers ou liens confiés par « Partager » depuis une autre
+  // application (Android). Relevé dès maintenant : c'est peut-être lui qui a
+  // lancé Rempart.
+  PartageEntrant.instance.init();
 
   // Les services lourds (base Matrix, chiffrement, push) sont amorcés DERRIÈRE
   // l'écran de démarrage. Les attendre ici laissait l'écran noir plus d'une
