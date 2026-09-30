@@ -31,6 +31,7 @@ import '../../../data/services/partage_entrant.dart';
 import '../../../data/services/reinitialisation_e2e.dart';
 import '../../widgets/adaptive/adaptive.dart';
 import '../../widgets/chat/glisser_pour_repondre.dart';
+import '../../widgets/chat/lecteur_video.dart';
 import '../../widgets/chat/message_bubble.dart';
 import '../../widgets/chat/message_input.dart';
 import '../../widgets/chat/selection_texte.dart';
@@ -825,12 +826,29 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     List<matrix.Event>? album,
   }) async {
     // Le fil va du plus récent au plus ancien ; la visionneuse suit l'envoi.
-    final images = (album ?? [event]).reversed.toList();
+    // Les vidéos d'un album ont leur propre lecteur.
+    final images = (album ?? [event])
+        .reversed
+        .where((media) => media.isImageMessage)
+        .toList();
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (context) => VisionneuseImage(
           images: images,
           depart: math.max(0, images.indexOf(event)),
+          onEnregistrer: _enregistrerPieceJointe,
+          onPartager: _partagerPieceJointe,
+        ),
+      ),
+    );
+  }
+
+  /// Lit une vidéo en plein écran, sans avoir à l'enregistrer d'abord.
+  Future<void> _ouvrirVideo(matrix.Event video) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => LecteurVideo(
+          video: video,
           onEnregistrer: _enregistrerPieceJointe,
           onPartager: _partagerPieceJointe,
         ),
@@ -1599,10 +1617,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                                       // message.
                                       onOuvrirImage: _isSearching
                                           ? null
-                                          : (image) => _ouvrirImage(
-                                                image,
-                                                album: groupe,
-                                              ),
+                                          : (media) => media.isVideoMessage
+                                              ? _ouvrirVideo(media)
+                                              : _ouvrirImage(
+                                                  media,
+                                                  album: groupe,
+                                                ),
                                       timeline: _timeline,
                                       isMine: isMine,
                                       onReagir: (symbole) =>
@@ -1622,7 +1642,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                                                         ? groupe
                                                         : null,
                                                   )
-                                              : null),
+                                              : event.isVideoMessage
+                                                  ? () => _ouvrirVideo(event)
+                                                  : null),
                                       onLongPress: () =>
                                           _showMessageOptions(event),
                                       // La citation etait deja tactile, mais le rappel

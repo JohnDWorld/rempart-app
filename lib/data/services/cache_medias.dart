@@ -84,13 +84,27 @@ String cleMedia(matrix.Event event) => event.transactionId ?? event.eventId;
 
 /// L'image d'un message, depuis la mémoire si elle y est déjà.
 Future<MediaCharge> chargerImage(matrix.Event event) =>
-    CacheMedias.instance.obtenir(cleMedia(event), () async {
-      // Aussi pour les salons en clair : dans un salon chiffré, l'adresse du
-      // média ne rend que du chiffré.
-      final fichier = await event.downloadAndDecryptAttachment();
-      final dimensions = await dimensionsImage(fichier.bytes);
-      return MediaCharge(
-        fichier.bytes,
-        dimensions == null ? null : dimensions.$1 / dimensions.$2,
-      );
-    });
+    CacheMedias.instance.obtenir(cleMedia(event), () => _charger(event));
+
+/// La vignette d'une vidéo, quand l'expéditeur en a fourni une (Element le
+/// fait, pas encore Rempart). Jamais la vidéo elle-même : trop lourde pour la
+/// mémoire, elle ne se charge qu'à la lecture.
+Future<MediaCharge> chargerVignette(matrix.Event event) =>
+    CacheMedias.instance.obtenir(
+      cleVignette(event),
+      () => _charger(event, vignette: true),
+    );
+
+String cleVignette(matrix.Event event) => '${cleMedia(event)}#vignette';
+
+Future<MediaCharge> _charger(matrix.Event event, {bool vignette = false}) async {
+  // Aussi pour les salons en clair : dans un salon chiffré, l'adresse du
+  // média ne rend que du chiffré.
+  final fichier =
+      await event.downloadAndDecryptAttachment(getThumbnail: vignette);
+  final dimensions = await dimensionsImage(fichier.bytes);
+  return MediaCharge(
+    fichier.bytes,
+    dimensions == null ? null : dimensions.$1 / dimensions.$2,
+  );
+}

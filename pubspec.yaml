@@ -1,7 +1,7 @@
 name: rempart_app
 description: Rempart - Messagerie souveraine avec chiffrement E2E
 publish_to: 'none'
-version: 1.0.0+86
+version: 1.0.0+87
 environment:
   sdk: '>=3.3.0 <4.0.0'
 
@@ -96,6 +96,10 @@ dependencies:
   # Enregistrement dans la galerie du telephone : sans lui, une photo recue ne
   # peut que se partager, jamais se garder.
   gal: ^2.3.3
+  # Lecture des videos dans la conversation. `web` sert a la version
+  # navigateur, ou la video dechiffree passe par un lien en memoire (Blob).
+  video_player: ^2.14.0
+  web: ^1.1.1
 
   # ===========================================
   # NOTIFICATIONS

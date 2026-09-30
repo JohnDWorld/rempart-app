@@ -407,7 +407,11 @@ extension EventHelpers on Event {
     if (info == null) return null;
 
     return MatrixFileInfo(
-      fileName: content['body'] as String? ?? 'fichier',
+      // `filename` d'abord : quand un média porte une légende, le corps est
+      // la légende, et la vidéo s'intitulait « Gros câlin maman loulou… ».
+      fileName: content['filename'] as String? ??
+          content['body'] as String? ??
+          'fichier',
       mimeType: info['mimetype'] as String?,
       size: info['size'] as int?,
       width: info['w'] as int?,

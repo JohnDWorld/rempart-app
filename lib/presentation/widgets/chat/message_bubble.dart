@@ -229,8 +229,12 @@ class MessageBubble extends ConsumerWidget {
                           // Texte du message. Un corps mis en forme
                           // (`formatted_body`) passe par le rendu riche : sans
                           // lui, un bloc de code d'agent arriverait aplati.
+                          // Sans légende, le corps d'un média est son nom de
+                          // fichier : rien à afficher pour une photo, une
+                          // vidéo ou un vocal.
                           if (legende == null &&
                               !affiche.isAudioMessage &&
+                              !affiche.isVideoMessage &&
                               (affiche.isTextMessage ||
                                   (affiche.plaintextBody.isNotEmpty &&
                                       !affiche.isImageMessage)))
@@ -431,6 +435,10 @@ class MessageBubble extends ConsumerWidget {
 
     if (affiche.isImageMessage) {
       return _ImageJointe(event: affiche);
+    }
+
+    if (affiche.isVideoMessage) {
+      return _VideoJointe(event: affiche);
     }
 
     if (affiche.isAudioMessage) {
@@ -639,6 +647,126 @@ class _ImageJointeState extends State<_ImageJointe> {
     return ClipRRect(
       borderRadius: BorderRadius.circular(8),
       child: AspectRatio(aspectRatio: _ratio(), child: contenu),
+    );
+  }
+}
+
+/// Vidéo d'un message : sa vignette si l'expéditeur en a fourni une, sinon un
+/// fond sombre, avec le bouton de lecture et la durée.
+///
+/// Elle s'affichait comme un fichier quelconque (icône, nom, taille) : pour la
+/// regarder, il fallait l'enregistrer puis l'ouvrir ailleurs. L'appui, porté
+/// par la bulle ou la case d'album, ouvre `LecteurVideo`.
+class _VideoJointe extends StatefulWidget {
+  const _VideoJointe({required this.event, this.enGrille = false, super.key});
+
+  final matrix.Event event;
+  final bool enGrille;
+
+  @override
+  State<_VideoJointe> createState() => _VideoJointeState();
+}
+
+class _VideoJointeState extends State<_VideoJointe> {
+  MediaCharge? _vignette;
+
+  @override
+  void initState() {
+    super.initState();
+    _charger();
+  }
+
+  // Même raison que pour les images : l'état survit au décalage du fil.
+  @override
+  void didUpdateWidget(_VideoJointe ancien) {
+    super.didUpdateWidget(ancien);
+    if (cleMedia(ancien.event) != cleMedia(widget.event)) _charger();
+  }
+
+  void _charger() {
+    _vignette = null;
+    if (!widget.event.hasThumbnail) return;
+    final cle = cleMedia(widget.event);
+    _vignette = CacheMedias.instance.deja(cleVignette(widget.event));
+    if (_vignette != null) return;
+    unawaited(
+      chargerVignette(widget.event).then(
+        (vignette) {
+          if (mounted && cleMedia(widget.event) == cle) {
+            setState(() => _vignette = vignette);
+          }
+        },
+        // Sans vignette, le fond sombre suffit : la vidéo reste lisible.
+        onError: (Object e) => debugPrint('MessageBubble: vignette ($e)'),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final vignette = _vignette;
+    final duree = widget.event.fileInfo?.formattedDuration ?? '';
+    final contenu = Semantics(
+      button: true,
+      label: duree.isEmpty ? 'Vidéo' : 'Vidéo, $duree',
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (vignette != null)
+            Image.memory(
+              vignette.octets,
+              fit: BoxFit.cover,
+              cacheWidth: (_largeurBulle(context) *
+                      MediaQuery.devicePixelRatioOf(context))
+                  .round(),
+            )
+          else
+            const ColoredBox(color: Color(0xFF1B2433)),
+          Center(
+            child: DecoratedBox(
+              decoration: const BoxDecoration(
+                color: Colors.black45,
+                shape: BoxShape.circle,
+              ),
+              child: Padding(
+                padding: EdgeInsets.all(widget.enGrille ? 6 : 10),
+                child: Icon(
+                  Icons.play_arrow,
+                  color: Colors.white,
+                  size: widget.enGrille ? 28 : 40,
+                ),
+              ),
+            ),
+          ),
+          if (duree.isNotEmpty)
+            Positioned(
+              left: 8,
+              bottom: 8,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  child: Text(
+                    duree,
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+
+    if (widget.enGrille) return contenu;
+    final ratio =
+        vignette?.ratio ?? _ratioAnnonce(widget.event) ?? 16 / 9;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: AspectRatio(aspectRatio: ratio.clamp(9 / 16, 1.91), child: contenu),
     );
   }
 }
@@ -1440,11 +1568,18 @@ class _GrilleAlbum extends StatelessWidget {
                                 // Une clé par média : sans elle, une photo
                                 // arrivée en cours de route redistribuait les
                                 // vignettes entre les cases.
-                                _ImageJointe(
-                                  key: ValueKey(cleMedia(evenement)),
-                                  event: evenement,
-                                  enGrille: true,
-                                ),
+                                if (evenement.isVideoMessage)
+                                  _VideoJointe(
+                                    key: ValueKey(cleMedia(evenement)),
+                                    event: evenement,
+                                    enGrille: true,
+                                  )
+                                else
+                                  _ImageJointe(
+                                    key: ValueKey(cleMedia(evenement)),
+                                    event: evenement,
+                                    enGrille: true,
+                                  ),
                                 if (restants > 0 && evenement == visibles.last)
                                   ColoredBox(
                                     color: Colors.black.withValues(alpha: 0.55),
