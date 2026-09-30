@@ -3,6 +3,26 @@ import 'package:rempart_app/core/utils/apercu_notification.dart';
 
 void main() {
   group('composerApercu', () {
+    test("les pièces d'un message sont gardées à part, pour s'empiler", () {
+      final groupe = composerApercu(
+        texte: 'je suis en route',
+        nomExpediteur: 'Bérénice',
+        nomRoom: 'Vacances',
+      );
+      expect(groupe.expediteur, 'Bérénice');
+      expect(groupe.texte, 'je suis en route');
+      expect(groupe.nomGroupe, 'Vacances');
+      final seul = composerApercu(texte: 'Salut');
+      expect(seul.expediteur, 'Contact inconnu');
+      expect(seul.nomGroupe, isNull);
+    });
+
+    test('un secret reste masqué, aussi dans la pile de messages', () {
+      final a = composerApercu(texte: 'Code : 482913', nomExpediteur: 'Banque');
+      expect(a.texte, a.corps);
+      expect(a.texte, isNot(contains('482913')));
+    });
+
     test('tête-à-tête : le contact en titre, le message en corps', () {
       final a = composerApercu(texte: 'On se voit à 18h ?', nomExpediteur: 'Bérénice');
       expect(a.titre, 'Bérénice');

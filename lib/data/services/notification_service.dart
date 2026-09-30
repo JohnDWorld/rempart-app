@@ -31,6 +31,18 @@ class NotificationService {
   static const _canalId = 'messages';
   static const _canalNom = 'Messages';
 
+  /// Toutes les conversations d'Android sous une seule entrée « Rempart »,
+  /// qui se déroule, plutôt qu'une ligne par conversation dans le bandeau.
+  static const _groupe = 'fr.rempart.messages';
+
+  /// Le résumé du groupe (« 3 conversations »). Un nombre fixe, hors de la
+  /// plage des hachages de room qu'il n'a aucune chance de croiser.
+  static const _idResume = 0x52454D50;
+
+  /// Messages gardés par conversation : au-delà, la notification déroulée
+  /// déborde de l'écran, et l'application dit le reste.
+  static const _messagesGardes = 8;
+
   final _plugin = FlutterLocalNotificationsPlugin();
 
   StreamSubscription<matrix.Event>? _abonnement;
@@ -66,6 +78,9 @@ class NotificationService {
       // méthode est appelée depuis des chemins qui n'attendent rien.
       await init(demanderAutorisation: false);
       await _plugin.cancel(id: roomId.hashCode);
+      // Écartée d'office : Android ne la retire pas toujours à temps pour la
+      // relecture qui suit.
+      await _resumer(retiree: roomId.hashCode);
     } catch (e) {
       // Le plugin n'est pas initialisé, ou la notification n'existe plus :
       // rien de tout cela ne mérite de remonter à l'utilisateur.
@@ -198,8 +213,9 @@ class NotificationService {
       return;
     }
 
-    final apercu =
-        roomId == null ? null : await apercuDuPush(roomId: roomId, eventId: eventId);
+    final apercu = roomId == null
+        ? null
+        : await apercuDuPush(roomId: roomId, eventId: eventId);
     if (apercu == null || roomId == null) {
       await _afficherNeutre(roomId);
       return;
@@ -209,28 +225,148 @@ class NotificationService {
 
   /// Affiche une notification de message.
   ///
-  /// L'identifiant est celui de la room : un nouveau message y remplace le
-  /// précédent au lieu d'empiler une notification par message.
+  /// Une notification par conversation, dont l'identifiant est celui de la
+  /// room. Sur Android, un message s'y AJOUTE au lieu de remplacer le
+  /// précédent : style « conversation », que la flèche déroule pour lire
+  /// les derniers messages sans ouvrir l'application, donc sans rien marquer
+  /// comme lu. Avant, seul le dernier restait visible.
   Future<void> _afficher({
     required int id,
     required ApercuNotification apercu,
     required String roomId,
   }) async {
+    final texte = apercu.texte;
+    final expediteur = apercu.expediteur;
+    AndroidNotificationDetails android;
+    if (estAndroid && texte != null && expediteur != null) {
+      android = AndroidNotificationDetails(
+        _canalId,
+        _canalNom,
+        importance: Importance.high,
+        priority: Priority.high,
+        category: AndroidNotificationCategory.message,
+        groupKey: _groupe,
+        styleInformation: await _conversation(
+          id: id,
+          nouveau: Message(texte, DateTime.now(), Person(name: expediteur)),
+          nomGroupe: apercu.nomGroupe,
+        ),
+      );
+    } else {
+      android = const AndroidNotificationDetails(
+        _canalId,
+        _canalNom,
+        importance: Importance.high,
+        priority: Priority.high,
+        groupKey: _groupe,
+      );
+    }
     await _plugin.show(
       id: id,
       title: apercu.titre,
       body: apercu.corps,
-      notificationDetails: const NotificationDetails(
-        android: AndroidNotificationDetails(
-          _canalId,
-          _canalNom,
-          importance: Importance.high,
-          priority: Priority.high,
-        ),
-        iOS: DarwinNotificationDetails(),
+      notificationDetails: NotificationDetails(
+        android: android,
+        // iOS range lui-même par fil de discussion.
+        iOS: DarwinNotificationDetails(threadIdentifier: roomId),
       ),
       payload: roomId,
     );
+    await _resumer();
+  }
+
+  /// Les messages déjà affichés pour cette conversation, plus le nouveau.
+  ///
+  /// Relus dans la notification elle-même plutôt que tenus en mémoire : le
+  /// chemin du push tourne dans un isolate qui naît à chaque message, et
+  /// n'aurait rien retenu du précédent. Une notification balayée repart de
+  /// zéro, ce qui est juste : l'utilisateur l'a écartée.
+  Future<MessagingStyleInformation> _conversation({
+    required int id,
+    required Message nouveau,
+    String? nomGroupe,
+  }) async {
+    var anciens = const <Message>[];
+    try {
+      final existante = await _android?.getActiveNotificationMessagingStyle(
+        id: id,
+      );
+      anciens = existante?.messages ?? const [];
+    } catch (e) {
+      // Style illisible (ancienne notification, sans style) : on repart du
+      // seul nouveau message plutôt que de ne rien afficher.
+      debugPrint('NotificationService: messages précédents illisibles ($e)');
+    }
+    final messages = [...anciens, nouveau];
+    return MessagingStyleInformation(
+      const Person(name: 'Vous'),
+      conversationTitle: nomGroupe,
+      groupConversation: nomGroupe != null,
+      messages: messages.length > _messagesGardes
+          ? messages.sublist(messages.length - _messagesGardes)
+          : messages,
+    );
+  }
+
+  AndroidFlutterLocalNotificationsPlugin? get _android => estAndroid
+      ? _plugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>()
+      : null;
+
+  /// Tient à jour le résumé du groupe (« 3 conversations », une ligne par
+  /// conversation une fois déroulé).
+  ///
+  /// Retiré seulement quand plus AUCUNE conversation n'attend : Android
+  /// retire avec un résumé toutes les notifications qu'il regroupe. Le retirer
+  /// dès qu'il n'en restait qu'une effaçait celle-ci avec lui, sans qu'elle
+  /// ait été lue (vu le 2026-09-30 : ouvrir une conversation depuis sa
+  /// notification faisait disparaître celle d'une autre). Avec une seule
+  /// conversation, Android n'affiche de toute façon qu'elle, sans l'en-tête.
+  Future<void> _resumer({int? retiree}) async {
+    final android = _android;
+    if (android == null) return;
+    try {
+      final actives = await android.getActiveNotifications();
+      final conversations = [
+        for (final n in actives)
+          if (n.groupKey == _groupe && n.id != _idResume && n.id != retiree) n,
+      ];
+      if (conversations.isEmpty) {
+        await _plugin.cancel(id: _idResume);
+        return;
+      }
+      final nombre = conversations.length == 1
+          ? '1 conversation'
+          : '${conversations.length} conversations';
+      await _plugin.show(
+        id: _idResume,
+        title: 'Rempart',
+        body: nombre,
+        notificationDetails: NotificationDetails(
+          android: AndroidNotificationDetails(
+            _canalId,
+            _canalNom,
+            importance: Importance.high,
+            priority: Priority.high,
+            groupKey: _groupe,
+            setAsGroupSummary: true,
+            // Le résumé ne sonne pas : chaque conversation l'a déjà fait.
+            groupAlertBehavior: GroupAlertBehavior.children,
+            onlyAlertOnce: true,
+            styleInformation: InboxStyleInformation(
+              [
+                for (final n in conversations)
+                  [n.title, n.body].whereType<String>().join(' : '),
+              ],
+              contentTitle: 'Rempart',
+              summaryText: nombre,
+            ),
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint('NotificationService: résumé non mis à jour ($e)');
+    }
   }
 
   /// Avis sans expéditeur ni texte, affiché quand on n'a rien à dire (réveil
@@ -246,11 +382,13 @@ class NotificationService {
           _canalNom,
           importance: Importance.high,
           priority: Priority.high,
+          groupKey: _groupe,
         ),
         iOS: DarwinNotificationDetails(),
       ),
       payload: roomId,
     );
+    await _resumer();
   }
 
   /// L'utilisateur accepte-t-il de voir ses messages dans les notifications ?

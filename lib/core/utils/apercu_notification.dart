@@ -2,10 +2,24 @@ import 'secret_message.dart';
 
 /// Titre et corps d'une notification de message.
 class ApercuNotification {
-  const ApercuNotification({required this.titre, required this.corps});
+  const ApercuNotification({
+    required this.titre,
+    required this.corps,
+    this.expediteur,
+    this.texte,
+    this.nomGroupe,
+  });
 
   final String titre;
   final String corps;
+
+  /// Les pièces d'un MESSAGE, séparées : Android les empile dans une seule
+  /// notification par conversation (style « conversation »), qu'on déroule
+  /// pour lire les précédents sans ouvrir l'application. Null pour ce qui
+  /// n'est pas un message (une demande de contact).
+  final String? expediteur;
+  final String? texte;
+  final String? nomGroupe;
 }
 
 /// Compose ce qui s'affichera dans le bandeau de notification.
@@ -38,11 +52,16 @@ ApercuNotification composerApercu({
     return ApercuNotification(
       titre: nomRoom,
       corps: nomExpediteur == null ? corps : '$nomExpediteur : $corps',
+      expediteur: nomExpediteur ?? 'Contact inconnu',
+      texte: corps,
+      nomGroupe: nomRoom,
     );
   }
 
   return ApercuNotification(
     titre: nomExpediteur ?? 'Rempart',
     corps: corps,
+    expediteur: nomExpediteur ?? 'Contact inconnu',
+    texte: corps,
   );
 }
