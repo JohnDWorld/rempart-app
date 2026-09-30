@@ -29,6 +29,7 @@ import '../../../data/services/enregistreur_vocal.dart';
 import '../../../data/services/notification_service.dart';
 import '../../../data/services/partage_entrant.dart';
 import '../../../data/services/reinitialisation_e2e.dart';
+import '../../../data/services/statut_presence.dart';
 import '../../widgets/adaptive/adaptive.dart';
 import '../../widgets/chat/glisser_pour_repondre.dart';
 import '../../widgets/chat/lecteur_video.dart';
@@ -111,9 +112,23 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   /// Envoi de pièce jointe en cours (upload + chiffrement peuvent durer).
   bool _envoiPieceJointe = false;
 
+  late final AppLifecycleListener _retour;
+
+  /// Retour à l'écran : ce qui est arrivé entre-temps est maintenant lu, et
+  /// sa notification n'a plus lieu d'être.
+  void _auRetour() {
+    if (NotificationService.instance.roomOuverte == widget.conversationId) {
+      unawaited(
+        NotificationService.instance.effacerNotification(widget.conversationId),
+      );
+    }
+    unawaited(_marquerCommeLu());
+  }
+
   @override
   void initState() {
     super.initState();
+    _retour = AppLifecycleListener(onResume: _auRetour);
     // Pas de notification pour la conversation qu'on est en train de lire.
     NotificationService.instance.roomOuverte = widget.conversationId;
     _itemPositionsListener.itemPositions.addListener(_surDefilement);
@@ -130,6 +145,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       NotificationService.instance.roomOuverte = null;
     }
     _itemPositionsListener.itemPositions.removeListener(_surDefilement);
+    _retour.dispose();
     _highlightTimer?.cancel();
     _searchController.dispose();
     _timeline?.cancelSubscriptions();
@@ -325,6 +341,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   /// On prend donc le dernier événement synchronisé de la timeline, celui que
   /// l'utilisateur a sous les yeux.
   Future<void> _marquerCommeLu() async {
+    // Seulement ce que l'utilisateur a sous les yeux : quittée conversation
+    // ouverte, l'écran restait monté, et chaque message reçu partait « lu »
+    // alors que personne ne l'avait vu. Le retour à l'écran rattrape.
+    if (!auPremierPlan) return;
     final timeline = _timeline;
     final room = ref.read(roomProvider(widget.conversationId));
     if (timeline == null || room == null) return;

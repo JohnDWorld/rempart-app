@@ -20,6 +20,7 @@ import '../../widgets/settings/enregistrement_photos_tile.dart';
 import '../../widgets/settings/mise_a_jour.dart';
 import '../../widgets/settings/push_mode_tile.dart';
 import '../../widgets/settings/soutien.dart';
+import '../../widgets/settings/statut_tile.dart';
 import '../../widgets/settings/taille_texte_tile.dart';
 import '../../widgets/settings/veille_batterie_tile.dart';
 
@@ -118,6 +119,12 @@ class SettingsScreen extends ConsumerWidget {
                   title: const Text('Changer le mot de passe'),
                   trailing: const CupertinoListTileChevron(),
                   onTap: () => context.push('/settings/mot-de-passe'),
+                ),
+                // Widget Material dans une liste Cupertino : enveloppé, sinon
+                // il peint sans Material ancêtre et lève à l'affichage.
+                const Material(
+                  color: Colors.transparent,
+                  child: StatutTile(),
                 ),
               ],
             ),
@@ -492,6 +499,7 @@ class SettingsScreen extends ConsumerWidget {
             trailing: const Icon(Icons.chevron_right),
             onTap: () => context.push('/settings/mot-de-passe'),
           ),
+          const StatutTile(),
 
           const Divider(),
 

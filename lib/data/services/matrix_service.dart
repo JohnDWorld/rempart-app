@@ -17,6 +17,7 @@ import 'analyse_video.dart';
 import 'client_rempart.dart';
 import 'enregistrement_photos.dart';
 import 'notification_service.dart';
+import 'statut_presence.dart';
 
 /// Service pour la gestion de la connexion et des opérations Matrix
 class MatrixService {
@@ -157,6 +158,8 @@ class MatrixService {
       unawaited(NotificationService.instance.ecouter(client));
       // Photos reçues vers la galerie, si l'utilisateur l'a demandé.
       unawaited(EnregistrementPhotos.instance.ecouter(client));
+      // En ligne à l'écran seulement, ou selon le statut choisi.
+      StatutPresence.instance.brancher(client);
     }
   }
 

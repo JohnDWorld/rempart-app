@@ -12,6 +12,7 @@ import '../providers/contenu_notifications.dart';
 import 'matrix_service.dart';
 import 'presence_isolate.dart';
 import 'push_contenu.dart';
+import 'statut_presence.dart';
 
 /// Notifications locales des nouveaux messages Matrix.
 ///
@@ -401,8 +402,10 @@ class NotificationService {
   Future<void> _notifier(matrix.Event event) async {
     try {
       final room = event.room;
-      // Rien à signaler pour la conversation déjà à l'écran.
-      if (room.id == roomOuverte) return;
+      // Rien à signaler pour la conversation déjà à l'écran. À l'écran
+      // seulement : quittée conversation ouverte, Rempart taisait tous ses
+      // messages, qui arrivaient sans notification.
+      if (room.id == roomOuverte && auPremierPlan) return;
 
       // Une invitation. D'un connu, elle est acceptée d'office et le message
       // qui suivra notifiera : rien à dire. D'un inconnu, c'est une demande,

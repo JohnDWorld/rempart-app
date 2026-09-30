@@ -23,6 +23,7 @@ import 'data/services/notification_service.dart';
 import 'data/services/partage_entrant.dart';
 import 'data/services/presence_isolate.dart';
 import 'data/services/push_service.dart';
+import 'data/services/statut_presence.dart';
 
 /// Argument passé par UnifiedPush quand il relance l'app, fermée, pour lui
 /// remettre une notification poussée.
@@ -104,6 +105,7 @@ Future<void> _demarrer(List<String> args) async {
   // utilisateur qui n'en veut pas.
   final contenuNotifications = await chargerContenuNotifications();
   final tailleTexte = await chargerTailleTexte();
+  await StatutPresence.instance.charger();
   NotificationService.instance.afficherContenu = contenuNotifications;
 
   runApp(

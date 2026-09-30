@@ -63,7 +63,11 @@ Future<ApercuNotification?> _apercuDuPush({
         MatrixConstants.applicationName,
         database: base,
       ),
-    );
+    )
+      // `init` lance une synchronisation, et sans avis contraire le serveur y
+      // lit « en ligne » : chaque message reçu application fermée affichait
+      // son destinataire en ligne. Hors ligne n'y change pas la présence.
+      ..syncPresence = PresenceType.offline;
 
     // Le strict nécessaire : ni premier `/sync` attendu, ni chargement complet
     // des rooms. On ne veut qu'une chose, et l'utilisateur attend sa
