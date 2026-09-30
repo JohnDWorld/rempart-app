@@ -5,14 +5,13 @@ import '../core/utils/derivation_mot_de_passe.dart';
 /// Repli sur le mot de passe tel quel, pour les comptes créés avant la
 /// dérivation.
 ///
-/// **À couper avant l'ouverture publique** (liste des tâches du dépôt, « Avant
-/// de déposer sur les boutiques »). Tant qu'il existe,
-/// un serveur malveillant peut refuser exprès la valeur dérivée pour se faire
-/// envoyer le vrai mot de passe. [ConnexionDerivee] ferme cette porte sur tout
-/// appareil qui a déjà vu le compte migré, mais un appareil neuf n'a aucun
-/// moyen de le savoir : seule la suppression du repli la ferme partout. Un
-/// compte encore ancien à ce moment-là passera par « mot de passe oublié ».
-const repliAncienMotDePasse = true;
+/// **Coupé le 2026-09-30**, une fois tous les comptes de la production migrés
+/// (démonstration et relecteurs Google compris). Tant qu'il existait, un
+/// serveur malveillant pouvait refuser exprès la valeur dérivée pour se faire
+/// envoyer le vrai mot de passe : [ConnexionDerivee] fermait cette porte sur
+/// tout appareil qui avait déjà vu le compte migré, mais seule la coupure la
+/// ferme partout. Un compte encore ancien passe par « mot de passe oublié ».
+const repliAncienMotDePasse = false;
 
 /// Clé posée dans les métadonnées Supabase d'un compte migré.
 ///
