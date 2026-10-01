@@ -5,6 +5,7 @@ import 'package:matrix/matrix.dart' as matrix;
 
 import '../../../app/theme.dart';
 import '../../../core/plateforme.dart';
+import '../../../core/utils/nom_appareil.dart';
 import '../../../data/providers/providers.dart';
 import '../../../data/services/appairage_service.dart';
 import '../../../services/auth_service.dart';
@@ -179,7 +180,7 @@ class _AppareilsScreenState extends ConsumerState<AppareilsScreen> {
   }
 
   Future<void> _fermer(matrix.Device appareil) async {
-    final nom = appareil.displayName ?? appareil.deviceId;
+    final nom = decrireAppareil(appareil.displayName).titre;
     final confirme = await showAdaptiveAlert<bool>(
       context: context,
       title: 'Fermer la session',
@@ -245,7 +246,7 @@ class _Appareil extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final nom = appareil.displayName ?? 'Appareil sans nom';
+    final description = decrireAppareil(appareil.displayName);
 
     return ListTile(
       leading: CircleAvatar(
@@ -253,23 +254,32 @@ class _Appareil extends StatelessWidget {
             ? theme.colorScheme.primary.withValues(alpha: 0.12)
             : theme.colorScheme.surfaceContainerHighest,
         child: Icon(
-          estCeluiCi ? Icons.smartphone : Icons.devices_other,
+          switch (description.genre) {
+            GenreAppareil.telephone => Icons.smartphone,
+            GenreAppareil.navigateur => Icons.language,
+            GenreAppareil.inconnu => Icons.devices_other,
+          },
           color: estCeluiCi
               ? theme.colorScheme.primary
               : theme.colorScheme.onSurfaceVariant,
         ),
       ),
-      title: Row(
+      // Wrap et non Row : trois pastilles et un titre ne tiennent pas sur une
+      // ligne de téléphone, elles passent dessous plutôt que de rogner le nom.
+      title: Wrap(
+        spacing: RempartTokens.espaceS,
+        runSpacing: 4,
+        crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          Flexible(child: Text(nom, overflow: TextOverflow.ellipsis)),
-          if (estCeluiCi) ...[
-            const SizedBox(width: RempartTokens.espaceS),
-            const _Pastille(texte: 'Cet appareil'),
-          ],
-          if (confiance != null) ...[
-            const SizedBox(width: RempartTokens.espaceS),
+          Text(description.titre),
+          if (estCeluiCi) const _Pastille(texte: 'Cet appareil'),
+          if (description.pastille != null)
+            _Pastille(
+              texte: description.pastille!,
+              couleur: theme.colorScheme.onSurfaceVariant,
+            ),
+          if (confiance != null)
             _Pastille(texte: confiance!.texte, sur: confiance!.sur),
-          ],
         ],
       ),
       subtitle: Text(
@@ -326,9 +336,13 @@ class _Appareil extends StatelessWidget {
 }
 
 class _Pastille extends StatelessWidget {
-  const _Pastille({required this.texte, this.sur});
+  const _Pastille({required this.texte, this.sur, this.couleur});
 
   final String texte;
+
+  /// Une couleur imposée, pour ce qui ne parle pas de confiance (le
+  /// navigateur ou le système), et prime alors sur [sur].
+  final Color? couleur;
 
   /// Trois valeurs et non deux : `null` pour une pastille neutre (« Cet
   /// appareil »), qui ne dit rien de la confiance.
@@ -337,11 +351,12 @@ class _Pastille extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final couleur = switch (sur) {
-      true => RempartTokens.texteSucces(theme.brightness),
-      false => theme.colorScheme.error,
-      null => theme.colorScheme.primary,
-    };
+    final couleur = this.couleur ??
+        switch (sur) {
+          true => RempartTokens.texteSucces(theme.brightness),
+          false => theme.colorScheme.error,
+          null => theme.colorScheme.primary,
+        };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(

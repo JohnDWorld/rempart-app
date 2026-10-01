@@ -160,6 +160,24 @@ class MatrixService {
       unawaited(EnregistrementPhotos.instance.ecouter(client));
       // En ligne à l'écran seulement, ou selon le statut choisi.
       StatutPresence.instance.brancher(client);
+      unawaited(_renommerAppareil(client));
+    }
+  }
+
+  /// Jusqu'au 2026-10-01, toute session s'appelait « Rempart Messenger » :
+  /// « Appareils connectés » ne distinguait pas un navigateur d'un téléphone.
+  /// Une session ouverte avant prend son vrai nom à son prochain démarrage.
+  /// Seul l'ancien nom est remplacé : un nom posé ailleurs reste.
+  Future<void> _renommerAppareil(Client client) async {
+    final id = client.deviceID;
+    if (id == null || !client.isLogged()) return;
+    try {
+      final appareil = await client.getDevice(id);
+      if (appareil.displayName != MatrixConstants.applicationName) return;
+      await client.updateDevice(id, displayName: nomDeCetAppareil());
+    } catch (e) {
+      // Hors ligne : ce sera pour le prochain démarrage.
+      debugPrint('Matrix: appareil non renommé ($e)');
     }
   }
 
@@ -381,7 +399,7 @@ class MatrixService {
       LoginType.mLoginPassword,
       identifier: AuthenticationUserIdentifier(user: username),
       password: password,
-      initialDeviceDisplayName: MatrixConstants.applicationName,
+      initialDeviceDisplayName: nomDeCetAppareil(),
     );
   }
 
@@ -404,7 +422,7 @@ class MatrixService {
       newToken: accessToken,
       newUserID: userId,
       newHomeserver: Uri.parse(MatrixConstants.homeserver),
-      newDeviceName: MatrixConstants.applicationName,
+      newDeviceName: nomDeCetAppareil(),
       newDeviceID: deviceId,
     );
   }
@@ -431,7 +449,7 @@ class MatrixService {
       await _client!.register(
         username: username,
         password: password,
-        initialDeviceDisplayName: MatrixConstants.applicationName,
+        initialDeviceDisplayName: nomDeCetAppareil(),
         auth: AuthenticationData(type: AuthenticationTypes.dummy),
       );
     } catch (e) {
@@ -440,7 +458,7 @@ class MatrixService {
       await _client!.register(
         username: username,
         password: password,
-        initialDeviceDisplayName: MatrixConstants.applicationName,
+        initialDeviceDisplayName: nomDeCetAppareil(),
       );
     }
 

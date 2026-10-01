@@ -2,6 +2,9 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 
+import 'user_agent.dart';
+import 'utils/nom_appareil.dart';
+
 /// Sommes-nous sur iOS ?
 ///
 /// À préférer partout à `Platform.isIOS` : sur le web, `dart:io` n'existe pas
@@ -19,3 +22,11 @@ bool get estAndroid => !kIsWeb && Platform.isAndroid;
 /// Réexporté ici pour que les écrans n'aient qu'un seul endroit où chercher,
 /// et ne raisonnent jamais en « ni Android ni iOS donc web ».
 bool get estWeb => kIsWeb;
+
+/// Le nom de cet appareil sur le compte : « Rempart · Android », « Rempart ·
+/// Opera (Linux) ». Voir `nomAppareil`.
+String nomDeCetAppareil() => nomAppareil(
+      android: estAndroid,
+      ios: estIOS,
+      userAgent: userAgentNavigateur,
+    );
