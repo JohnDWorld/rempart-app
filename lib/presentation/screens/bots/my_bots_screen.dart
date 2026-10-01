@@ -258,7 +258,6 @@ class _MyBotsScreenState extends ConsumerState<MyBotsScreen> {
   }
 
   Future<void> _showToken(CreatedBot bot, {String title = 'Bot créé'}) {
-    final messenger = ScaffoldMessenger.of(context);
     final theme = Theme.of(context);
     return showAdaptiveDialog<void>(
       context: context,
@@ -277,18 +276,7 @@ class _MyBotsScreenState extends ConsumerState<MyBotsScreen> {
               'menu du bot.',
             ),
             const SizedBox(height: 12),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: SelectableText(
-                bot.apiToken,
-                style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
-              ),
-            ),
+            _ValeurCopiable(bot.apiToken),
             // Un token sans l'adresse a laquelle le presenter ne sert a rien :
             // la personne repart avec un secret et aucune idee de ce qu'elle
             // doit appeler. Les trois voies sont nommees parce qu'elles ne se
@@ -298,10 +286,7 @@ class _MyBotsScreenState extends ConsumerState<MyBotsScreen> {
               const SizedBox(height: 16),
               Text('Où le présenter', style: theme.textTheme.titleSmall),
               const SizedBox(height: 6),
-              SelectableText(
-                BotGatewayConstants.baseUrl,
-                style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
-              ),
+              _ValeurCopiable(BotGatewayConstants.baseUrl),
               const SizedBox(height: 8),
               Text(
                 'En-tête « Authorization: Bearer <token> ». Trois façons de '
@@ -315,15 +300,6 @@ class _MyBotsScreenState extends ConsumerState<MyBotsScreen> {
           ],
         ),
         actions: [
-          ActionDialogue(
-            onPressed: () {
-              Clipboard.setData(ClipboardData(text: bot.apiToken));
-              messenger.showSnackBar(
-                const SnackBar(content: Text('Token copié')),
-              );
-            },
-            child: const Text('Copier'),
-          ),
           ActionDialogue(
             principale: true,
             onPressed: () => Navigator.pop(context),
@@ -443,6 +419,57 @@ class _MyBotsScreenState extends ConsumerState<MyBotsScreen> {
 }
 
 /// Indicateur de quota : "X / N bots", avec un ton d'alerte à la limite.
+/// Une valeur à recopier ailleurs (le token, l'adresse de la passerelle),
+/// avec son bouton de copie au bout de la ligne : sélectionner à la main une
+/// suite de quarante caractères en oublie un sur deux essais. La coche qui
+/// remplace l'icône confirme la copie dans la fenêtre même, là où une
+/// SnackBar resterait cachée sous la barrière du dialogue.
+class _ValeurCopiable extends StatefulWidget {
+  const _ValeurCopiable(this.valeur);
+
+  final String valeur;
+
+  @override
+  State<_ValeurCopiable> createState() => _ValeurCopiableState();
+}
+
+class _ValeurCopiableState extends State<_ValeurCopiable> {
+  bool _copiee = false;
+
+  Future<void> _copier() async {
+    await Clipboard.setData(ClipboardData(text: widget.valeur));
+    if (mounted) setState(() => _copiee = true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.only(left: 10),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: SelectableText(
+              widget.valeur,
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+            ),
+          ),
+          IconButton(
+            tooltip: _copiee ? 'Copié' : 'Copier',
+            onPressed: _copier,
+            icon: Icon(_copiee ? Icons.check : Icons.copy, size: 18),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _QuotaIndicator extends StatelessWidget {
   const _QuotaIndicator({required this.quota});
 
