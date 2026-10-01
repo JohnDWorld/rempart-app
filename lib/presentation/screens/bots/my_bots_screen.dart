@@ -216,8 +216,10 @@ class _MyBotsScreenState extends ConsumerState<MyBotsScreen> {
       builder: (context) => DialogueAdaptatif(
         title: const Text('Supprimer le bot ?'),
         content: Text(
-          'Le bot ${bot.name} sera révoqué et cessera de répondre. '
-          'Cette action est définitive.',
+          'Le bot ${bot.name} cessera de répondre. Ses conversations seront '
+          'effacées, chez vous comme chez ceux qui lui écrivaient, et il '
+          'quittera ses groupes. Son nom redeviendra libre pour un nouveau '
+          'bot. Cette action est définitive.',
         ),
         actions: [
           ActionDialogue(
