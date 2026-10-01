@@ -26,6 +26,20 @@
 
   <title>Rempart</title>
   <link rel="manifest" href="manifest.json">
+  <!-- Sous chaque champ dessiné par Flutter, le navigateur garde un champ
+       invisible qui porte le même texte et le vrai curseur, et Flutter lui
+       demande la police Inter. Or Flutter ne charge Inter que pour son propre
+       dessin : le navigateur se rabattait sur Arial, plus étroite, et son
+       curseur prenait du retard à chaque lettre (32 pixels sur 72 caractères).
+       Là où ce curseur se voit, il clignotait donc avant le vrai, d'autant
+       plus loin que le message était long. Ce sont les fichiers que Flutter
+       télécharge déjà : rien de plus ne transite. -->
+  <style>
+    @font-face { font-family: "Inter"; font-weight: 400; src: url("assets/assets/fonts/Inter-Regular.ttf"); }
+    @font-face { font-family: "Inter"; font-weight: 500; src: url("assets/assets/fonts/Inter-Medium.ttf"); }
+    @font-face { font-family: "Inter"; font-weight: 600; src: url("assets/assets/fonts/Inter-SemiBold.ttf"); }
+    @font-face { font-family: "Inter"; font-weight: 700; src: url("assets/assets/fonts/Inter-Bold.ttf"); }
+  </style>
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>
