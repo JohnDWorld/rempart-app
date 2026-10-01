@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:rempart_app/core/utils/reponse_bouton.dart';
 
 /// Ce qu'un appui sur un bouton envoie, et ce qu'il affiche.
 ///
@@ -43,5 +44,32 @@ void main() {
     // Sinon un champ mal rempli ferait disparaître le message.
     expect(affiche({'body': '!ok', 'fr.rempart.libelle_bouton': '   '}), '!ok');
     expect(affiche({'body': '!ok', 'fr.rempart.libelle_bouton': 42}), '!ok');
+  });
+
+  group('contenu envoyé à l appui', () {
+    test('la valeur, le libellé et la question visée', () {
+      expect(
+        contenuReponseBouton(
+          valeur: '!cancel',
+          libelle: '❌ Annuler',
+          questionId: r'$question',
+        ),
+        {
+          'msgtype': 'm.text',
+          'body': '!cancel',
+          'fr.rempart.libelle_bouton': '❌ Annuler',
+          'fr.rempart.reponse_a': r'$question',
+        },
+      );
+    });
+
+    test('sans identifiant connu, le champ est absent', () {
+      expect(
+        contenuReponseBouton(valeur: 'ok', libelle: 'OK').containsKey(
+          'fr.rempart.reponse_a',
+        ),
+        isFalse,
+      );
+    });
   });
 }

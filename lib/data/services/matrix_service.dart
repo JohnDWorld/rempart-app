@@ -12,6 +12,7 @@ import '../../core/constants/matrix_constants.dart';
 import '../../core/plateforme.dart';
 import '../../core/utils/demandes.dart';
 import '../../core/utils/dimensions_image.dart';
+import '../../core/utils/reponse_bouton.dart';
 import '../models/matrix_extensions.dart';
 import 'analyse_video.dart';
 import 'client_rempart.dart';
@@ -1500,17 +1501,20 @@ class MatrixService {
     required String roomId,
     required String valeur,
     required String libelle,
+    String? questionId,
   }) async {
     final room = _client!.getRoomById(roomId);
     if (room == null) return null;
     // `sendEvent` et non `sendTextEvent` : le second ne sait pas porter de
     // champ supplémentaire. Il évite au passage l'interprétation des
     // commandes, or les valeurs commencent souvent par « ! » ou « / ».
-    return room.sendEvent({
-      'msgtype': 'm.text',
-      'body': valeur,
-      'fr.rempart.libelle_bouton': libelle,
-    });
+    return room.sendEvent(
+      contenuReponseBouton(
+        valeur: valeur,
+        libelle: libelle,
+        questionId: questionId,
+      ),
+    );
   }
 
   /// Taille maximale d'un envoi, telle que le serveur l'annonce.

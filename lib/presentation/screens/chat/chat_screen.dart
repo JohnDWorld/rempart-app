@@ -1053,12 +1053,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   /// voyagent donc dans le même message : le corps porte la valeur, un champ
   /// à nous porte le libellé. Les autres clients Matrix ne voient que la
   /// valeur, ce qui reste juste.
-  Future<void> _repondreAuBouton(String texte, String valeur) async {
+  Future<void> _repondreAuBouton(
+    String texte,
+    String valeur, {
+    String? questionId,
+  }) async {
     try {
       await ref.read(matrixServiceProvider).repondreParBouton(
             roomId: widget.conversationId,
             valeur: valeur,
             libelle: texte,
+            questionId: questionId,
           );
       if (mounted) setState(() {});
     } catch (e) {
@@ -1647,7 +1652,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                                       isMine: isMine,
                                       onReagir: (symbole) =>
                                           _reagir(event, symbole),
-                                      onBouton: _repondreAuBouton,
+                                      onBouton: (texte, valeur) =>
+                                          _repondreAuBouton(
+                                        texte,
+                                        valeur,
+                                        questionId: event.eventId,
+                                      ),
                                       showAvatar: showAvatar,
                                       highlighted:
                                           event.eventId == _highlightedEventId,
