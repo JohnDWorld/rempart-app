@@ -12,6 +12,7 @@ import '../../core/constants/matrix_constants.dart';
 import '../../core/plateforme.dart';
 import '../../core/utils/demandes.dart';
 import '../../core/utils/dimensions_image.dart';
+import '../../core/utils/reactions.dart';
 import '../../core/utils/reponse_bouton.dart';
 import '../models/matrix_extensions.dart';
 import 'analyse_video.dart';
@@ -1275,28 +1276,23 @@ class MatrixService {
   }
 
   /// Réactions d'un message, regroupées par symbole et rangées par ordre
-  /// d'apparition.
-  ///
-  /// Le décompte ignore les réactions annulées : une réaction retirée reste
-  /// dans la timeline sous forme d'événement effacé.
+  /// d'apparition (voir `regrouperReactions`).
   static List<ReactionGroupee> reactionsDe(
     Event message,
     Timeline timeline,
     String? moi,
-  ) {
-    final parSymbole = <String, ReactionGroupee>{};
-    for (final reaction
-        in message.aggregatedEvents(timeline, RelationshipTypes.reaction)) {
-      if (reaction.redacted) continue;
-      final symbole = reaction.content
-          .tryGetMap<String, Object?>('m.relates_to')?['key'] as String?;
-      if (symbole == null || symbole.isEmpty) continue;
-      final groupe = parSymbole[symbole] ??= ReactionGroupee(symbole);
-      groupe.nombre++;
-      if (reaction.senderId == moi) groupe.parMoi = true;
-    }
-    return parSymbole.values.toList();
-  }
+  ) =>
+      regrouperReactions(
+        message.aggregatedEvents(timeline, RelationshipTypes.reaction).map(
+              (reaction) => (
+                expediteur: reaction.senderId,
+                symbole: reaction.content
+                    .tryGetMap<String, Object?>('m.relates_to')?['key'] as String?,
+                retiree: reaction.redacted,
+              ),
+            ),
+        moi,
+      );
 
   /// Invite un utilisateur dans une room
   Future<void> inviteToRoom(String roomId, String userId) async {
@@ -1834,17 +1830,4 @@ class MatrixService {
       return null;
     }
   }
-}
-
-
-/// Une réaction et son décompte, tels qu'affichés sous un message.
-class ReactionGroupee {
-  ReactionGroupee(this.symbole);
-
-  final String symbole;
-  int nombre = 0;
-
-  /// Vrai si l'on fait partie de ceux qui ont réagi ainsi : la pastille se
-  /// distingue alors, et un nouvel appui retire la réaction.
-  bool parMoi = false;
 }

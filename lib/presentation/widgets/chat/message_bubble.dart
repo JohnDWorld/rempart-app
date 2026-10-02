@@ -12,12 +12,15 @@ import 'package:matrix/matrix.dart' as matrix;
 import '../../../app/theme.dart';
 import '../../../core/mouvement.dart';
 import '../../../core/plateforme.dart';
+import '../../../core/utils/reactions.dart';
 import '../../../core/utils/secret_message.dart';
 import '../../../data/models/matrix_extensions.dart';
+import '../../../data/providers/providers.dart';
 import '../../../data/providers/taille_texte.dart';
 import '../../../data/providers/vitesse_vocal.dart';
 import '../../../data/services/cache_medias.dart';
 import '../../../data/services/matrix_service.dart';
+import '../adaptive/adaptive.dart';
 import '../common/user_avatar.dart';
 import 'message_riche.dart';
 
@@ -854,8 +857,9 @@ class _PeutEtreMasqueState extends State<_PeutEtreMasque> {
 
 /// Les réactions posées sous un message.
 ///
-/// Un appui bascule la sienne : c'est le geste attendu partout ailleurs, et
-/// c'est aussi ce qu'un agent qui propose « ✅ pour approuver » vient lire.
+/// Un appui montre qui a réagi, et non une réaction de plus : dans un groupe,
+/// on ne savait pas qui avait réagi à son message (relevé le 2026-10-02). On
+/// réagit par l'appui long sur le message, comme pour toute réaction.
 class _Reactions extends StatelessWidget {
   const _Reactions({
     required this.event,
@@ -887,9 +891,15 @@ class _Reactions extends StatelessWidget {
         children: [
           for (final reaction in reactions)
             InkWell(
-              onTap: onReagir == null
-                  ? null
-                  : () => onReagir!(reaction.symbole),
+              onTap: () => feuilleAdaptative<void>(
+                context: context,
+                showDragHandle: true,
+                builder: (_) => _QuiAReagi(
+                  reactions: reactions,
+                  room: event.room,
+                  onRetirer: onReagir,
+                ),
+              ),
               borderRadius: BorderRadius.circular(999),
               child: Container(
                 padding:
@@ -917,6 +927,80 @@ class _Reactions extends StatelessWidget {
   }
 }
 
+
+/// Qui a réagi à un message, et avec quoi.
+///
+/// Ma réaction vient en tête, comme sur WhatsApp, et c'est d'ici qu'elle se
+/// retire. Un nom se résout par le profil (`nomContactProvider`), jamais par
+/// l'identifiant, qui ne dit rien à personne.
+class _QuiAReagi extends ConsumerWidget {
+  const _QuiAReagi({
+    required this.reactions,
+    required this.room,
+    required this.onRetirer,
+  });
+
+  final List<ReactionGroupee> reactions;
+  final matrix.Room room;
+  final void Function(String symbole)? onRetirer;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final moi = room.client.userID;
+    final lignes = [
+      for (final reaction in reactions)
+        for (final mxid in reaction.expediteurs)
+          (symbole: reaction.symbole, mxid: mxid),
+    ]..sort((a, b) => (b.mxid == moi ? 1 : 0) - (a.mxid == moi ? 1 : 0));
+
+    return SafeArea(
+      child: ListView(
+        shrinkWrap: true,
+        children: [
+          Padding(
+            // Haut non nul : sur un grand écran, la feuille devient une
+            // fenêtre sans poignée, et le titre touchait son bord.
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: Text(
+              lignes.length > 1 ? '${lignes.length} réactions' : '1 réaction',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ),
+          for (final ligne in lignes)
+            _ligne(context, ref, ligne.symbole, ligne.mxid, ligne.mxid == moi),
+        ],
+      ),
+    );
+  }
+
+  Widget _ligne(
+    BuildContext context,
+    WidgetRef ref,
+    String symbole,
+    String mxid,
+    bool estMoi,
+  ) {
+    final nom = ref.watch(nomContactProvider(mxid)) ?? 'Contact inconnu';
+    final retirer = estMoi ? onRetirer : null;
+    return ListTile(
+      leading: UserAvatar(
+        name: nom,
+        mxc: room.unsafeGetUserFromMemoryOrFallback(mxid).avatarUrl,
+        client: room.client,
+        size: 40,
+      ),
+      title: Text(estMoi ? 'Vous' : nom),
+      subtitle: retirer == null ? null : const Text('Appuyer pour retirer'),
+      trailing: Text(symbole, style: const TextStyle(fontSize: 22)),
+      onTap: retirer == null
+          ? null
+          : () {
+              Navigator.pop(context);
+              retirer(symbole);
+            },
+    );
+  }
+}
 
 /// Les boutons que porte un message, lus dans `fr.rempart.boutons`.
 ///
