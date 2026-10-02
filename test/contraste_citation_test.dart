@@ -27,16 +27,29 @@ void main() {
   Color aplatir(Color dessus, Color fond) =>
       Color.alphaBlend(dessus, fond.withAlpha(255));
 
-  const clair = ColorScheme.light(
-    primary: RempartTokens.bleu,
-    onSurface: RempartTokens.texteClair,
-  );
-  const sombre = ColorScheme.dark(
-    primary: RempartTokens.bleu,
-    onPrimary: Colors.white,
-    surface: RempartTokens.surfaceSombre,
-    onSurface: RempartTokens.texteSombre,
-  );
+  // Les vrais thèmes de l'application, et non des schémas faits main : celui du
+  // thème sombre portait un texte blanc sur l'accent, là où l'app met du bleu
+  // nuit, et la citation dans ma bulle tombait à 3,3:1 sans que rien ne le voie.
+  final clair = RempartTheme.light.colorScheme;
+  final sombre = RempartTheme.dark.colorScheme;
+
+  // Ma bulle est un dégradé : l'accent, puis l'accent assombri de 10 %.
+  List<Color> maBulle(ColorScheme schema) => [
+        schema.primary,
+        Color.alphaBlend(Colors.black.withValues(alpha: 0.10), schema.primary),
+      ];
+
+  CouleursCitation mienne(ColorScheme schema) => CouleursCitation.pour(
+        estLaMienne: true,
+        schema: schema,
+        luminosite: schema.brightness,
+      );
+
+  CouleursCitation contact(ColorScheme schema) => CouleursCitation.pour(
+        estLaMienne: false,
+        schema: schema,
+        luminosite: schema.brightness,
+      );
 
   /// Vérifie un contexte complet : fond détaché de la bulle, puis textes
   /// lisibles sur ce fond.
@@ -60,53 +73,31 @@ void main() {
         reason: '$contexte : texte cité illisible');
   }
 
-  test('dans ma propre bulle', () {
-    // Le cas qui avait regressé : fond primary sur bulle primary.
-    verifier(
-      'ma bulle',
-      CouleursCitation.pour(
-        estLaMienne: true,
-        schema: clair,
-        luminosite: Brightness.light,
-      ),
-      clair.primary,
-    );
-  });
+  for (final (nom, schema) in [('clair', clair), ('sombre', sombre)]) {
+    test('dans ma propre bulle, thème $nom', () {
+      for (final bulle in maBulle(schema)) {
+        verifier('ma bulle $nom', mienne(schema), bulle);
+      }
+    });
 
-  test('dans la bulle du contact, thème clair', () {
-    verifier(
-      'contact clair',
-      CouleursCitation.pour(
-        estLaMienne: false,
-        schema: clair,
-        luminosite: Brightness.light,
-      ),
-      RempartTokens.surfaceClaire,
-    );
-  });
+    test('dans la bulle du contact, thème $nom', () {
+      verifier('contact $nom', contact(schema), schema.surface);
+    });
 
-  test('dans la bulle du contact, thème sombre', () {
-    verifier(
-      'contact sombre',
-      CouleursCitation.pour(
-        estLaMienne: false,
-        schema: sombre,
-        luminosite: Brightness.dark,
-      ),
-      RempartTokens.surfaceSombre,
-    );
-  });
-
-  test('la barre de gauche se voit sur le fond de la citation', () {
-    // C'est elle qui signale la citation avant même la nuance de fond : elle
-    // doit tenir le seuil des elements graphiques (3,0).
-    for (final cas in [
-      (CouleursCitation.pour(estLaMienne: true, schema: clair, luminosite: Brightness.light), clair.primary),
-      (CouleursCitation.pour(estLaMienne: false, schema: clair, luminosite: Brightness.light), RempartTokens.surfaceClaire),
-      (CouleursCitation.pour(estLaMienne: false, schema: sombre, luminosite: Brightness.dark), RempartTokens.surfaceSombre),
-    ]) {
-      final fond = aplatir(cas.$1.fond, cas.$2);
-      expect(contraste(aplatir(cas.$1.barre, fond), fond), greaterThanOrEqualTo(3.0));
-    }
-  });
+    test('la barre de gauche se voit sur le fond de la citation, thème $nom',
+        () {
+      // C'est elle qui signale la citation avant même la nuance de fond : elle
+      // doit tenir le seuil des éléments graphiques (3,0).
+      for (final (couleurs, bulle) in [
+        for (final b in maBulle(schema)) (mienne(schema), b),
+        (contact(schema), schema.surface),
+      ]) {
+        final fond = aplatir(couleurs.fond, bulle);
+        expect(
+          contraste(aplatir(couleurs.barre, fond), fond),
+          greaterThanOrEqualTo(3.0),
+        );
+      }
+    });
+  }
 }

@@ -458,7 +458,9 @@ class MessageBubble extends ConsumerWidget {
           Icon(
             _getFileIcon(fileInfo?.mimeType ?? ''),
             color:
-                isMine ? Colors.white : Theme.of(context).colorScheme.primary,
+                isMine
+                    ? Theme.of(context).colorScheme.onPrimary
+                    : Theme.of(context).colorScheme.primary,
           ),
           const SizedBox(width: 8),
           Flexible(
@@ -471,7 +473,9 @@ class MessageBubble extends ConsumerWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontWeight: FontWeight.w500,
-                    color: isMine ? Colors.white : null,
+                    color: isMine
+                        ? Theme.of(context).colorScheme.onPrimary
+                        : null,
                   ),
                 ),
                 if (fileInfo?.formattedSize.isNotEmpty ?? false)
@@ -1261,7 +1265,7 @@ class _VocalJointState extends ConsumerState<_VocalJoint> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final couleur =
-        widget.isMine ? Colors.white : theme.colorScheme.onSurfaceVariant;
+        widget.isMine ? theme.colorScheme.onPrimary : theme.colorScheme.onSurfaceVariant;
     final duree = _duree;
     final avancement = duree.inMilliseconds > 0
         ? (_position.inMilliseconds / duree.inMilliseconds).clamp(0.0, 1.0)

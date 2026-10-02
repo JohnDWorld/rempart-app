@@ -539,11 +539,16 @@ class CouleursCitation {
     required Brightness luminosite,
   }) {
     if (estLaMienne) {
-      // Un voile SOMBRE, et non un éclaircissement : sur une bulle déjà
-      // colorée, assombrir détache le bloc et fait remonter le texte clair
-      // d'un même geste, là où l'éclaircir gagnerait l'un en perdant l'autre.
+      // Le voile s'éloigne de l'encre : il détache le bloc ET fait remonter le
+      // texte d'un même geste. Sombre quand l'encre de ma bulle est claire
+      // (thème clair, blanc sur bleu), clair quand elle est sombre (thème
+      // sombre, bleu nuit sur bleu clair). Assombrir dans les deux cas faisait
+      // tomber la citation à 3,3:1 en sombre (relevé le 2026-10-01).
+      final encreClaire = schema.onPrimary.computeLuminance() > 0.5;
       return CouleursCitation(
-        fond: Colors.black.withAlpha(64),
+        fond: encreClaire
+            ? Colors.black.withAlpha(64)
+            : Colors.white.withAlpha(72),
         nom: schema.onPrimary,
         texte: schema.onPrimary.withAlpha(230),
         barre: schema.onPrimary,
