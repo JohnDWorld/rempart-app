@@ -483,7 +483,18 @@ class NotificationService {
       }
     }
 
-    final texte = evenement.plaintextBody.trim();
+    return texteDeNotification(evenement);
+  }
+
+  /// Ce que la notification dit d'un message déjà déchiffré.
+  ///
+  /// `texteApercu` et non le corps brut, comme le chemin de l'arrière-plan
+  /// (`push_contenu`) : le corps d'une pièce jointe est son nom de fichier, et
+  /// la notification affichée application ouverte annonçait encore
+  /// « vocal_1788….m4a » (relevé le 2026-10-04). Il masque aussi les secrets.
+  @visibleForTesting
+  static String texteDeNotification(matrix.Event evenement) {
+    final texte = evenement.texteApercu.trim();
     return texte.isEmpty ? 'Nouveau message' : texte;
   }
 }

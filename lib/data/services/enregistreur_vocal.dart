@@ -3,8 +3,12 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
+
+import '../../core/plateforme.dart';
 
 /// Un enregistrement terminé, prêt à partir dans une conversation.
 @immutable
@@ -27,6 +31,50 @@ class VocalEnregistre {
   final List<int> formeOnde;
 }
 
+/// Le temps réellement enregistré, pauses déduites.
+///
+/// À part et avec son horloge en paramètre : c'est ce qui permet de tester le
+/// décompte sans micro.
+class TempsEnregistre {
+  TempsEnregistre(this._maintenant);
+
+  final DateTime Function() _maintenant;
+  Duration _acquis = Duration.zero;
+  DateTime? _reprise;
+  bool _actif = false;
+
+  bool get enPause => _actif && _reprise == null;
+
+  Duration get ecoule {
+    if (!_actif) return Duration.zero;
+    final reprise = _reprise;
+    return reprise == null ? _acquis : _acquis + _maintenant().difference(reprise);
+  }
+
+  void demarrer() {
+    _actif = true;
+    _acquis = Duration.zero;
+    _reprise = _maintenant();
+  }
+
+  void suspendre() {
+    if (!_actif || _reprise == null) return;
+    _acquis = ecoule;
+    _reprise = null;
+  }
+
+  void reprendre() {
+    if (!enPause) return;
+    _reprise = _maintenant();
+  }
+
+  void arreter() {
+    _actif = false;
+    _acquis = Duration.zero;
+    _reprise = null;
+  }
+}
+
 /// Enregistrement d'un message vocal.
 ///
 /// Le format est de l'AAC-LC dans un conteneur M4A, et non de l'Opus qu'emploie
@@ -43,7 +91,18 @@ class EnregistreurVocal {
 
   final _enregistreur = AudioRecorder();
   String? _chemin;
-  DateTime? _debut;
+  final _temps = TempsEnregistre(DateTime.now);
+
+  /// Écran éteint, appel, autre application : Rempart quitte l'écran.
+  ///
+  /// Depuis Android 9, une application qui n'est plus à l'écran ne reçoit que
+  /// du SILENCE de son micro (sauf service de premier plan, que le paquet
+  /// `record` n'a pas). L'enregistrement continuait donc, et le vocal arrivait
+  /// avec un long blanc au milieu (relevé le 2026-10-04). On le met en pause
+  /// le temps de l'absence, et il reprend au retour.
+  AppLifecycleListener? _cycle;
+
+  static const _canal = MethodChannel('rempart/maj');
 
   /// Amplitudes relevées pendant l'enregistrement, en décibels.
   ///
@@ -59,9 +118,9 @@ class EnregistreurVocal {
 
   bool get enCours => _chemin != null;
 
-  /// Temps écoulé depuis le début, pour le chronomètre affiché.
-  Duration get ecoule =>
-      _debut == null ? Duration.zero : DateTime.now().difference(_debut!);
+  /// Temps enregistré depuis le début, pauses déduites, pour le chronomètre
+  /// affiché.
+  Duration get ecoule => _temps.ecoule;
 
   /// Demande le micro et commence à enregistrer.
   ///
@@ -130,14 +189,20 @@ class EnregistreurVocal {
       path: chemin,
     );
     _chemin = chemin;
-    _debut = DateTime.now();
+    _temps.demarrer();
+    _cycle = AppLifecycleListener(onHide: _suspendre, onShow: _reprendre);
+    // La veille automatique de l'écran est le cas courant : on l'empêche le
+    // temps de l'enregistrement, comme un lecteur vidéo.
+    unawaited(_garderEcranAllume(true));
     _amplitudes.clear();
     // Dix mesures par seconde : assez pour que la silhouette suive la voix,
     // assez peu pour qu'un message de deux minutes ne remplisse pas
     // l'evenement (on la reduit de toute facon a la fin).
     _mesure = _enregistreur
         .onAmplitudeChanged(const Duration(milliseconds: 100))
-        .listen((a) => _amplitudes.add(a.current));
+        .listen((a) {
+      if (!_temps.enPause) _amplitudes.add(a.current);
+    });
     return true;
   }
 
@@ -189,6 +254,43 @@ class EnregistreurVocal {
     ];
   }
 
+  Future<void> _suspendre() async {
+    if (!enCours || _temps.enPause) return;
+    _temps.suspendre();
+    try {
+      await _enregistreur.pause();
+    } catch (e) {
+      debugPrint('Vocal: pause impossible ($e)');
+    }
+  }
+
+  Future<void> _reprendre() async {
+    if (!enCours || !_temps.enPause) return;
+    try {
+      await _enregistreur.resume();
+      _temps.reprendre();
+    } catch (e) {
+      debugPrint('Vocal: reprise impossible ($e)');
+    }
+  }
+
+  void _fermerCycle() {
+    _cycle?.dispose();
+    _cycle = null;
+    unawaited(_garderEcranAllume(false));
+  }
+
+  /// Android seul, où le défaut a été vu. Ailleurs, la pause au départ de
+  /// l'écran suffit à ne pas enregistrer de vide.
+  Future<void> _garderEcranAllume(bool allume) async {
+    if (!estAndroid) return;
+    try {
+      await _canal.invokeMethod<void>('garderEcranAllume', allume);
+    } catch (e) {
+      debugPrint('Vocal: veille de l ecran non reglee ($e)');
+    }
+  }
+
   /// Arrête et rend l'enregistrement, ou null s'il n'y a rien d'exploitable.
   ///
   /// Le fichier temporaire est effacé dans tous les cas : les octets sont déjà
@@ -203,7 +305,8 @@ class EnregistreurVocal {
     _amplitudes.clear();
     final chemin = await _enregistreur.stop();
     _chemin = null;
-    _debut = null;
+    _temps.arreter();
+    _fermerCycle();
     if (chemin == null) return null;
 
     final fichier = File(chemin);
@@ -245,7 +348,8 @@ class EnregistreurVocal {
     if (!enCours) return;
     final chemin = _chemin;
     _chemin = null;
-    _debut = null;
+    _temps.arreter();
+    _fermerCycle();
     await _mesure?.cancel();
     _mesure = null;
     _amplitudes.clear();

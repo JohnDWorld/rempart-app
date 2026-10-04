@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
 import android.view.View
+import android.view.WindowManager
 import android.view.WindowInsets
 import android.view.WindowInsetsAnimation
 import androidx.core.content.FileProvider
@@ -208,6 +209,19 @@ class MainActivity : FlutterActivity() {
                 // exige REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, une permission
                 // que le Play Store n'accorde qu'au cas par cas. Un ecran de
                 // plus a traverser vaut mieux qu'une publication refusee.
+                // Pendant un vocal : un ecran eteint fait quitter l'ecran a
+                // Rempart, et Android ne donne plus alors que du silence au
+                // micro. Le drapeau ne vaut que pour cette fenetre, et se
+                // retire a la fin de l'enregistrement.
+                "garderEcranAllume" -> {
+                    if (appel.arguments == true) {
+                        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    } else {
+                        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    }
+                    reponse.success(null)
+                }
+
                 "ouvrirReglageBatterie" -> {
                     startActivity(
                         Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS),
