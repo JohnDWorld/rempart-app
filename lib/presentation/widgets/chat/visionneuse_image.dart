@@ -18,6 +18,7 @@ class VisionneuseImage extends StatefulWidget {
     required this.images,
     required this.onEnregistrer,
     required this.onPartager,
+    this.onEnregistrerTout,
     this.depart = 0,
     super.key,
   });
@@ -30,6 +31,9 @@ class VisionneuseImage extends StatefulWidget {
 
   final void Function(matrix.Event image) onEnregistrer;
   final void Function(matrix.Event image) onPartager;
+
+  /// Toutes les photos de l'album d'un coup, proposé dès qu'il y en a deux.
+  final void Function(List<matrix.Event> images)? onEnregistrerTout;
 
   @override
   State<VisionneuseImage> createState() => _VisionneuseImageState();
@@ -88,6 +92,16 @@ class _VisionneuseImageState extends State<VisionneuseImage> {
               widget.onEnregistrer(image);
             },
           ),
+          if (total > 1 && widget.onEnregistrerTout != null)
+            IconButton(
+              icon: const Icon(Icons.download_for_offline_outlined),
+              tooltip: 'Tout enregistrer ($total)',
+              onPressed: () {
+                final images = widget.images;
+                Navigator.pop(context);
+                widget.onEnregistrerTout!(images);
+              },
+            ),
           IconButton(
             icon: Icon(Icons.adaptive.share),
             tooltip: 'Partager',

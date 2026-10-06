@@ -20,6 +20,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../../app/theme.dart';
 import '../../../core/mouvement.dart';
 import '../../../core/plateforme.dart';
+import '../../../core/telechargement.dart';
 import '../../../core/utils/groupe_album.dart';
 import '../../../data/models/bot.dart';
 import '../../../data/models/matrix_extensions.dart';
@@ -813,6 +814,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   /// La galerie n'accepte que les médias ; pour un PDF, seule la feuille
   /// système permet de choisir où le ranger.
   Future<void> _enregistrerPieceJointe(matrix.Event event) async {
+    if (estWeb) {
+      await _telechargerDansLeNavigateur(event);
+      return;
+    }
     final fichier = await _fichierTemporaire(event);
     if (fichier == null || !mounted) return;
 
@@ -833,6 +838,61 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       // porte de sortie plutôt qu'un échec sec.
       _signaler('Galerie indisponible (${e.type.name}), partage proposé.');
       if (mounted) await _partagerFichier(fichier, event);
+    }
+  }
+
+  /// Sur le web, ni galerie ni dossier temporaire : le navigateur télécharge.
+  Future<bool> _telechargerDansLeNavigateur(matrix.Event event) async {
+    try {
+      final fichier = await event.downloadAndDecryptAttachment();
+      await telechargerDansLeNavigateur(
+        fichier.bytes,
+        nom: _nomSur(event),
+        mime: fichier.mimeType,
+      );
+      return true;
+    } catch (e) {
+      _signaler('Téléchargement impossible : $e');
+      return false;
+    }
+  }
+
+  /// Enregistre toutes les photos d'un album, l'une après l'autre.
+  ///
+  /// Une à une, comme l'envoi : quinze photos déchiffrées ensemble pèsent en
+  /// mémoire, et un échec au milieu doit dire combien sont déjà passées.
+  Future<void> _enregistrerLot(List<matrix.Event> images) async {
+    var faites = 0;
+    for (final image in images) {
+      if (!mounted) return;
+      final ok = estWeb
+          ? await _telechargerDansLeNavigateur(image)
+          : await _versLaGalerie(image);
+      if (!ok) break;
+      faites++;
+    }
+    if (faites == 0) return;
+    final ou = estWeb ? 'téléchargée' : 'enregistrée';
+    final total = images.length;
+    _signaler(
+      faites == total
+          ? '$faites photo${faites > 1 ? 's' : ''} $ou${faites > 1 ? 's' : ''}'
+              '${estWeb ? '' : ' (album Rempart)'}.'
+          : '$faites sur $total ${ou}s, puis erreur.',
+    );
+  }
+
+  /// Une photo dans la galerie, sans repli sur le partage : dans un lot, une
+  /// feuille de partage par photo serait pire qu'un arrêt franc.
+  Future<bool> _versLaGalerie(matrix.Event image) async {
+    final fichier = await _fichierTemporaire(image);
+    if (fichier == null) return false;
+    try {
+      await Gal.putImage(fichier.path, album: 'Rempart');
+      return true;
+    } on GalException catch (e) {
+      _signaler('Galerie indisponible (${e.type.name}).');
+      return false;
     }
   }
 
@@ -857,6 +917,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           images: images,
           depart: math.max(0, images.indexOf(event)),
           onEnregistrer: _enregistrerPieceJointe,
+          onEnregistrerTout: _enregistrerLot,
           onPartager: _partagerPieceJointe,
         ),
       ),
@@ -877,6 +938,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   Future<void> _partagerPieceJointe(matrix.Event event) async {
+    // Un navigateur d'ordinateur ne partage pas de fichier : la pièce jointe
+    // se télécharge, et se partage ensuite d'où l'on veut.
+    if (estWeb) {
+      await _telechargerDansLeNavigateur(event);
+      return;
+    }
     final fichier = await _fichierTemporaire(event);
     if (fichier == null || !mounted) return;
     await _partagerFichier(fichier, event);
