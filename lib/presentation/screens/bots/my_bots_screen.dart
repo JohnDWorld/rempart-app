@@ -38,6 +38,11 @@ class _MyBotsScreenState extends ConsumerState<MyBotsScreen> {
   }
 
   void _refresh() {
+    // Le menu de commandes des conversations lit sa propre copie de cette
+    // liste, calculée une fois : sans ceci, un bot créé ou des commandes
+    // changées ici n'y apparaissaient qu'au redémarrage de l'application
+    // (vu le 2026-10-05 sur Tyrion, créé avec ses commandes, sans bouton).
+    ref.invalidate(commandesDesBotsProvider);
     setState(() {
       _botsFuture = _load();
     });

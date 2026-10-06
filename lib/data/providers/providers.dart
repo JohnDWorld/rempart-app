@@ -38,9 +38,11 @@ final botGatewayServiceProvider = Provider<BotGatewayService>((ref) {
 /// Commandes declarees par les bots de l'utilisateur, indexees par mxid.
 ///
 /// Sert a proposer la liste des le « / » dans une conversation avec un bot,
-/// comme le fait Telegram. Charge une fois : une commande declaree ne change
-/// que lorsque son proprietaire l'edite, et un echec (gateway injoignable)
-/// rend une table vide - la saisie continue de fonctionner, sans suggestion.
+/// comme le fait Telegram. Charge une fois, puis rechargee a chaque
+/// rechargement de « Mes bots » (creation, configuration, suppression) : une
+/// commande declaree ne change que lorsque son proprietaire l'edite. Un echec
+/// (gateway injoignable) rend une table vide - la saisie continue de
+/// fonctionner, sans suggestion.
 final commandesDesBotsProvider =
     FutureProvider<Map<String, List<BotCommand>>>((ref) async {
   // Le catalogue d'abord : il est en dur, donc disponible même sans réseau.
