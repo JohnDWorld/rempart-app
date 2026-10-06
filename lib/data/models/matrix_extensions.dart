@@ -12,6 +12,29 @@ String? _extractLocalpart(String matrixId) {
 }
 
 extension RoomHelpers on Room {
+  /// Heure du dernier accusé de lecture de chaque autre membre (mxid → heure).
+  ///
+  /// Le fil principal et le reste du salon portent chacun leurs accusés : on
+  /// garde le plus récent des deux. Sert à la double coche (`luParUnAutre`) et
+  /// à la fiche « Informations », qui ne doivent jamais se contredire.
+  Map<String, DateTime> get derniersAccuses {
+    final moi = client.userID;
+    final accuses = <String, DateTime>{};
+    final etats = [
+      receiptState.global,
+      if (receiptState.mainThread != null) receiptState.mainThread!,
+    ];
+    for (final etat in etats) {
+      for (final entree in etat.otherUsers.entries) {
+        if (entree.key == moi) continue;
+        final quand = entree.value.timestamp;
+        final avant = accuses[entree.key];
+        if (avant == null || quand.isAfter(avant)) accuses[entree.key] = quand;
+      }
+    }
+    return accuses;
+  }
+
   /// Nombre de messages non lus
   int get unreadCount => notificationCount;
 
@@ -200,21 +223,8 @@ extension EventHelpers on Event {
   /// Un accusé Matrix ne désigne que le DERNIER message lu ; les précédents
   /// n'en portent aucun. On compare donc les horodatages plutôt que de
   /// chercher un accusé posé sur cet événement précis.
-  bool get luParUnAutre {
-    final moi = room.client.userID;
-    final etats = [
-      room.receiptState.global,
-      if (room.receiptState.mainThread != null) room.receiptState.mainThread!,
-    ];
-
-    for (final etat in etats) {
-      for (final entree in etat.otherUsers.entries) {
-        if (entree.key == moi) continue;
-        if (!entree.value.timestamp.isBefore(originServerTs)) return true;
-      }
-    }
-    return false;
-  }
+  bool get luParUnAutre => room.derniersAccuses.values
+      .any((quand) => !quand.isBefore(originServerTs));
 
   /// Vérifie si c'est un message système
   bool get isSystemMessage =>

@@ -33,6 +33,7 @@ import '../../../data/services/reinitialisation_e2e.dart';
 import '../../../data/services/statut_presence.dart';
 import '../../widgets/adaptive/adaptive.dart';
 import '../../widgets/chat/glisser_pour_repondre.dart';
+import '../../widgets/chat/informations_message.dart';
 import '../../widgets/chat/lecteur_video.dart';
 import '../../widgets/chat/message_bubble.dart';
 import '../../widgets/chat/message_input.dart';
@@ -1058,6 +1059,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             ),
           ],
           if (isMine && !event.redacted) ...[
+            if (event.status.isSent)
+              CupertinoActionSheetAction(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _montrerInformations(event);
+                },
+                child: const Text('Informations'),
+              ),
             CupertinoActionSheetAction(
               onPressed: () {
                 Navigator.pop(context);
@@ -1197,6 +1206,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     );
   }
 
+  void _montrerInformations(matrix.Event event) {
+    feuilleAdaptative<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (_) => InformationsMessage(event: event),
+    );
+  }
+
   void _showMaterialMessageOptions(matrix.Event event, bool isMine) {
     feuilleAdaptative(
       context: context,
@@ -1254,6 +1271,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               ),
             ],
             if (isMine && !event.redacted) ...[
+              // Quand il est parti, et qui l'a lu : rien à dire d'un message
+              // que le serveur n'a pas encore accepté.
+              if (event.status.isSent)
+                ListTile(
+                  leading: const Icon(Icons.info_outline),
+                  title: const Text('Informations'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _montrerInformations(event);
+                  },
+                ),
               // Pas de « Modifier » sur un message qui n'est jamais parti :
               // une édition remplace un événement du serveur, et il n'y en a
               // aucun à remplacer. L'entrée ne pouvait qu'échouer.
