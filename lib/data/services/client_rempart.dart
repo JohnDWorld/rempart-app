@@ -51,6 +51,7 @@ class ClientRempart extends Client {
     super.clientName, {
     required super.database,
     super.verificationMethods,
+    super.sendTimelineEventTimeout,
   }) : super(formatLocalpart: false);
 
   @override

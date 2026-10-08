@@ -9,6 +9,7 @@ import '../../core/constants/matrix_constants.dart';
 import '../../core/utils/apercu_notification.dart';
 import '../../core/utils/demandes.dart';
 import '../models/matrix_extensions.dart';
+import 'client_rempart.dart';
 
 /// Va chercher le contenu réel d'un message annoncé par un push.
 ///
@@ -25,6 +26,43 @@ import '../models/matrix_extensions.dart';
 /// l'exception : session Megolm absente, base verrouillée par l'application au
 /// premier plan, serveur injoignable, message déjà lu. L'appelant retombe alors
 /// sur l'avis neutre, qui reste une notification correcte.
+/// Client Matrix monté le temps d'une tâche d'arrière-plan (push, bouton
+/// d'une notification), sur la base de l'application, à refermer par
+/// `dispose`. À n'ouvrir que si l'application ne tourne pas
+/// (`PresenceIsolate.applicationVivante`) : deux clients sur la même base se
+/// disputent son verrou.
+///
+/// `ClientRempart`, comme l'application : il refuse d'écrire en clair dans un
+/// salon chiffré, et ne transforme pas un identifiant en nom « embelli »
+/// (`U Ae9db…`), qui partait en titre de notification.
+Future<ClientRempart> clientEphemere() async {
+  // vodozemac AVANT le client : sans lui, `Client.init` laisse le module de
+  // chiffrement à null, et rien ne se déchiffre ni ne se chiffre.
+  if (!vod.isInitialized()) {
+    await flutter_vod.init();
+  }
+  final dossier = await getApplicationDocumentsDirectory();
+  final base = await openDatabase(
+    '${dossier.path}/${MatrixConstants.applicationName}.db',
+  );
+  return ClientRempart(
+    MatrixConstants.applicationName,
+    database: await MatrixSdkDatabase.init(
+      MatrixConstants.applicationName,
+      database: base,
+    ),
+    // Une minute par défaut : bien plus que ce qu'Android laisse à une
+    // application réveillée en arrière-plan avant de geler son processus.
+    // Une réponse sans réseau restait alors en suspens, sans l'avis d'échec
+    // qui permet de la renvoyer (vu à l'essai, gel au bout de 40 s).
+    sendTimelineEventTimeout: const Duration(seconds: 20),
+  )
+    // `init` lance une synchronisation, et sans avis contraire le serveur y
+    // lit « en ligne » : chaque message reçu application fermée affichait
+    // son destinataire en ligne. Hors ligne n'y change pas la présence.
+    ..syncPresence = PresenceType.offline;
+}
+
 Future<ApercuNotification?> apercuDuPush({
   required String roomId,
   required String eventId,
@@ -44,30 +82,7 @@ Future<ApercuNotification?> _apercuDuPush({
 }) async {
   Client? client;
   try {
-    // vodozemac AVANT le client : sans lui, `Client.init` laisse le module de
-    // chiffrement à null et l'événement revient illisible.
-    if (!vod.isInitialized()) {
-      await flutter_vod.init();
-    }
-
-    final dossier = await getApplicationDocumentsDirectory();
-    final base = await openDatabase(
-      '${dossier.path}/${MatrixConstants.applicationName}.db',
-    );
-    client = Client(
-      MatrixConstants.applicationName,
-      // Comme `ClientRempart` : un identifiant « embelli » (`U Ae9db…`) ne se
-      // reconnaissait plus, et partait en titre de notification.
-      formatLocalpart: false,
-      database: await MatrixSdkDatabase.init(
-        MatrixConstants.applicationName,
-        database: base,
-      ),
-    )
-      // `init` lance une synchronisation, et sans avis contraire le serveur y
-      // lit « en ligne » : chaque message reçu application fermée affichait
-      // son destinataire en ligne. Hors ligne n'y change pas la présence.
-      ..syncPresence = PresenceType.offline;
+    client = await clientEphemere();
 
     // Le strict nécessaire : ni premier `/sync` attendu, ni chargement complet
     // des rooms. On ne veut qu'une chose, et l'utilisateur attend sa

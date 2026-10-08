@@ -38,6 +38,22 @@ class PresenceIsolate {
     IsolateNameServer.removePortNameMapping(_nom);
     final port = _port = ReceivePort();
     IsolateNameServer.registerPortWithName(port.sendPort, _nom);
+    port.listen((message) => surMessage?.call(message));
+  }
+
+  /// Ce que l'application fait d'un message reçu par [relayer].
+  static void Function(Object? message)? surMessage;
+
+  /// Confie [message] à l'application principale si elle tourne dans ce
+  /// processus, et rend faux sinon : l'appelant agit alors lui-même. C'est
+  /// ainsi qu'un isolate d'arrière-plan fait agir le client de l'application
+  /// au lieu d'en ouvrir un second sur la même base.
+  static bool relayer(Object? message) {
+    if (estWeb) return false;
+    final port = IsolateNameServer.lookupPortByName(_nom);
+    if (port == null) return false;
+    port.send(message);
+    return true;
   }
 
   /// Vrai si l'application principale tourne dans ce processus.

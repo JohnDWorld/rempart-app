@@ -9,6 +9,8 @@ import '../../core/utils/apercu_notification.dart';
 import '../../core/utils/demandes.dart';
 import '../models/matrix_extensions.dart';
 import '../providers/contenu_notifications.dart';
+import 'actions_notification.dart';
+import 'actions_notification_arriere_plan.dart';
 import 'matrix_service.dart';
 import 'presence_isolate.dart';
 import 'push_contenu.dart';
@@ -43,6 +45,26 @@ class NotificationService {
   /// Messages gardés par conversation : au-delà, la notification déroulée
   /// déborde de l'écran, et l'application dit le reste.
   static const _messagesGardes = 8;
+
+  /// « Répondre » et « Marquer comme lu », sur chaque notification de
+  /// conversation. Android Auto n'affiche une messagerie qu'avec ces deux
+  /// actions, chacune marquée de son sens (`semanticAction`) et sans écran à
+  /// ouvrir (`showsUserInterface` faux, la valeur par défaut) : la réponse se
+  /// dicte, rien ne s'ouvre dans la voiture.
+  @visibleForTesting
+  static const actionsDeConversation = [
+    AndroidNotificationAction(
+      actionRepondre,
+      'Répondre',
+      inputs: [AndroidNotificationActionInput(label: 'Votre réponse')],
+      semanticAction: SemanticAction.reply,
+    ),
+    AndroidNotificationAction(
+      actionLu,
+      'Marquer comme lu',
+      semanticAction: SemanticAction.markAsRead,
+    ),
+  ];
 
   final _plugin = FlutterLocalNotificationsPlugin();
 
@@ -121,6 +143,7 @@ class NotificationService {
           onOuvrirRoom?.call(roomId);
         }
       },
+      onDidReceiveBackgroundNotificationResponse: traiterActionDeNotification,
     );
 
     if (estAndroid) {
@@ -162,6 +185,10 @@ class NotificationService {
   /// Branche les notifications sur un client Matrix connecté.
   Future<void> ecouter(matrix.Client client) async {
     await init();
+    // Les boutons des notifications arrivent dans un isolate à part, qui les
+    // relaie ici tant que l'application tourne (voir
+    // `traiterActionDeNotification`).
+    PresenceIsolate.surMessage = (message) => unawaited(_agir(client, message));
     await _abonnement?.cancel();
     _abonnement = client.onNotification.stream.listen(_notifier);
     // Le SDK ne sait pas évaluer la règle qui fait notifier les réactions à
@@ -181,6 +208,7 @@ class NotificationService {
   }
 
   Future<void> arreter() async {
+    PresenceIsolate.surMessage = null;
     await _abonnement?.cancel();
     _abonnement = null;
     await _reactions?.cancel();
@@ -264,6 +292,7 @@ class NotificationService {
         priority: Priority.high,
         category: AndroidNotificationCategory.message,
         groupKey: _groupe,
+        actions: actionsDeConversation,
         styleInformation: await _conversation(
           id: id,
           nouveau: Message(texte, DateTime.now(), Person(name: expediteur)),
@@ -293,6 +322,103 @@ class NotificationService {
     await _resumer();
   }
 
+  /// Un bouton de notification relayé par l'isolate d'arrière-plan : c'est le
+  /// client de l'application qui agit.
+  Future<void> _agir(matrix.Client client, Object? message) async {
+    if (message is! Map) return;
+    final action = message['action'];
+    final roomId = message['roomId'];
+    final texte = message['texte'];
+    if (action is! String || roomId is! String) return;
+    var reussi = false;
+    try {
+      reussi = await executerActionNotification(
+        client,
+        action: action,
+        roomId: roomId,
+        texte: texte is String ? texte : null,
+      );
+    } catch (e) {
+      debugPrint('NotificationService: action impossible ($e)');
+    }
+    await apresAction(
+      action: action,
+      roomId: roomId,
+      reussi: reussi,
+      texte: texte is String ? texte : null,
+    );
+  }
+
+  /// Suite d'un bouton de notification, une fois l'action menée.
+  ///
+  /// Une réponse partie s'ajoute à la notification (« Vous : … »), qui reste
+  /// affichée : c'est la confirmation que demande Android. Il refuse de toute
+  /// façon qu'une application retire une notification à laquelle on vient de
+  /// répondre (`FLAG_LIFETIME_EXTENDED_BY_DIRECT_REPLY`, Android 15+) : seule
+  /// une mise à jour lève cette prolongation, et un retrait lancé juste
+  /// derrière annulait la mise à jour avant son affichage (vu sur Android 16).
+  /// Elle part ensuite comme les autres, à l'ouverture de la conversation.
+  /// Une réponse qui n'est pas partie revient à sa place, avec son texte :
+  /// perdue en silence, elle laisserait l'autre sans nouvelles, et celui qui
+  /// l'a dictée en voiture croirait avoir répondu.
+  Future<void> apresAction({
+    required String action,
+    required String roomId,
+    required bool reussi,
+    String? texte,
+  }) async {
+    final id = roomId.hashCode;
+    if (reussi || action != actionRepondre) {
+      final reponse = texte?.trim() ?? '';
+      if (action == actionRepondre && reponse.isNotEmpty && estAndroid) {
+        try {
+          await _plugin.show(
+            id: id,
+            notificationDetails: NotificationDetails(
+              android: AndroidNotificationDetails(
+                _canalId,
+                _canalNom,
+                silent: true,
+                category: AndroidNotificationCategory.message,
+                groupKey: _groupe,
+                actions: actionsDeConversation,
+                // Sans auteur : c'est l'utilisateur lui-même.
+                styleInformation: await _conversation(
+                  id: id,
+                  nouveau: Message(reponse, DateTime.now(), null),
+                ),
+              ),
+            ),
+            payload: roomId,
+          );
+        } catch (e) {
+          debugPrint('NotificationService: réponse non affichée ($e)');
+        }
+        await _resumer();
+        return;
+      }
+      await _plugin.cancel(id: id);
+      await _resumer(retiree: id);
+      return;
+    }
+    await _plugin.show(
+      id: id,
+      title: 'Réponse non envoyée',
+      body: texte,
+      notificationDetails: const NotificationDetails(
+        android: AndroidNotificationDetails(
+          _canalId,
+          _canalNom,
+          importance: Importance.high,
+          priority: Priority.high,
+          groupKey: _groupe,
+        ),
+      ),
+      payload: roomId,
+    );
+    await _resumer();
+  }
+
   /// Les messages déjà affichés pour cette conversation, plus le nouveau.
   ///
   /// Relus dans la notification elle-même plutôt que tenus en mémoire : le
@@ -305,11 +431,13 @@ class NotificationService {
     String? nomGroupe,
   }) async {
     var anciens = const <Message>[];
+    var titre = nomGroupe;
     try {
       final existante = await _android?.getActiveNotificationMessagingStyle(
         id: id,
       );
       anciens = existante?.messages ?? const [];
+      titre ??= existante?.conversationTitle;
     } catch (e) {
       // Style illisible (ancienne notification, sans style) : on repart du
       // seul nouveau message plutôt que de ne rien afficher.
@@ -318,8 +446,8 @@ class NotificationService {
     final messages = [...anciens, nouveau];
     return MessagingStyleInformation(
       const Person(name: 'Vous'),
-      conversationTitle: nomGroupe,
-      groupConversation: nomGroupe != null,
+      conversationTitle: titre,
+      groupConversation: titre != null,
       messages: messages.length > _messagesGardes
           ? messages.sublist(messages.length - _messagesGardes)
           : messages,

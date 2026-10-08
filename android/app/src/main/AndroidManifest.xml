@@ -110,6 +110,19 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- Android Auto : Rempart est une messagerie, ses notifications de
+             conversation s'affichent dans la voiture (lecture a voix haute,
+             reponse dictee). Elles portent pour cela "Repondre" et "Marquer
+             comme lu" (notification_service.dart). -->
+        <meta-data
+            android:name="com.google.android.gms.car.application"
+            android:resource="@xml/automotive_app_desc" />
+        <!-- Recoit les boutons "Repondre" et "Marquer comme lu". Le greffon de
+             notifications ne le declare pas lui-meme : sans cette ligne, le
+             toucher part dans le vide et la reponse tourne sans fin. -->
+        <receiver
+            android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ActionBroadcastReceiver" />
 
         <!-- Passe l'APK telecharge a l'installateur d'Android. Depuis Android 7,
              un fichier ne se partage plus par son chemin (file://) mais par un
