@@ -36,4 +36,23 @@ void main() {
     ], moi);
     expect(groupes.single.expediteurs, [lea]);
   });
+
+  test('la règle de push ne vise que les réactions à mes messages, avec son',
+      () {
+    final regle = corpsRegleReactions(moi);
+    expect(regle['conditions'], [
+      {'kind': 'event_match', 'key': 'type', 'pattern': 'm.reaction'},
+      {
+        'kind': 'im.nheko.msc3664.related_event_match',
+        'rel_type': 'm.annotation',
+        'key': 'sender',
+        'pattern': moi,
+      },
+    ]);
+    // Sans son, Synapse pousse en priorité basse et Android retarde l'avis.
+    expect(regle['actions'], [
+      'notify',
+      {'set_tweak': 'sound', 'value': 'default'},
+    ]);
+  });
 }

@@ -47,6 +47,7 @@ class NotificationService {
   final _plugin = FlutterLocalNotificationsPlugin();
 
   StreamSubscription<matrix.Event>? _abonnement;
+  StreamSubscription<matrix.Event>? _reactions;
   bool _pret = false;
 
   String? _roomOuverte;
@@ -163,11 +164,27 @@ class NotificationService {
     await init();
     await _abonnement?.cancel();
     _abonnement = client.onNotification.stream.listen(_notifier);
+    // Le SDK ne sait pas évaluer la règle qui fait notifier les réactions à
+    // mes messages (voir `MatrixService.activerNotificationsDeReaction`) : il
+    // ne les met jamais dans `onNotification`. Mêmes gardes que lui, et
+    // `_notifier` ne garde que celles qui visent un de mes messages.
+    await _reactions?.cancel();
+    _reactions = client.onTimelineEvent.stream
+        .where(
+          (event) =>
+              event.type == matrix.EventTypes.Reaction &&
+              client.prevBatch != null &&
+              event.senderId != client.userID &&
+              event.room.notificationCount > 0,
+        )
+        .listen(_notifier);
   }
 
   Future<void> arreter() async {
     await _abonnement?.cancel();
     _abonnement = null;
+    await _reactions?.cancel();
+    _reactions = null;
     await _plugin.cancelAll();
   }
 

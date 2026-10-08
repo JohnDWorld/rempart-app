@@ -158,6 +158,7 @@ class MatrixService {
     final client = _client;
     if (client != null) {
       unawaited(NotificationService.instance.ecouter(client));
+      if (client.isLogged()) unawaited(activerNotificationsDeReaction());
       // Photos reçues vers la galerie, si l'utilisateur l'a demandé.
       unawaited(EnregistrementPhotos.instance.ecouter(client));
       // En ligne à l'écran seulement, ou selon le statut choisi.
@@ -481,33 +482,36 @@ class MatrixService {
   // Durcissement E2E (cross-signing + sauvegarde de clés)
   // ============================================
 
-  /// Fait notifier les réactions, que Matrix passe sous silence par défaut.
+  /// Fait notifier les réactions à mes messages, que Matrix passe sous silence.
   ///
-  /// La spécification prévoit une règle `.m.rule.reaction` qui écarte les
-  /// `m.reaction` de toute notification. C'est un choix raisonnable pour un
-  /// salon public bruyant, mais pas ici : dans Rempart, une réaction est la
-  /// façon de répondre à un agent qui demande une validation, et ne pas savoir
-  /// qu'on a été lu vide le geste de son sens.
+  /// Dans Rempart, une réaction est la façon de répondre à un agent qui
+  /// demande une validation, et ne pas savoir qu'on a été lu vide le geste de
+  /// son sens. Jusqu'au 2026-10-08, on désactivait `.m.rule.reaction`, ce qui
+  /// ne suffisait pas : aucune autre règle par défaut ne vise le type
+  /// `m.reaction`, et une réaction de Rempart part en clair (le SDK ne chiffre
+  /// pas un événement fait d'une seule relation). Rien ne la poussait donc.
   ///
-  /// Désactiver la règle agit des deux côtés d'un coup : le serveur se met à
-  /// pousser les réactions, et le SDK, qui évalue les mêmes règles en local,
-  /// cesse de les écarter de `onNotification`.
+  /// La règle posée ici (`corpsRegleReactions`) ne vise que les réactions à
+  /// mes messages. En `override`, elle passe avant `.m.rule.reaction`. Le SDK
+  /// ne sait pas évaluer sa condition MSC3664 et l'ignore : quand
+  /// l'application tourne, c'est `NotificationService` qui repère ces
+  /// réactions.
   ///
-  /// Best-effort : un serveur qui refuse ne doit pas faire échouer la
-  /// connexion. Le tri (ne garder que les réactions à ses propres messages) se
-  /// fait côté application, la règle Matrix ne sachant pas l'exprimer.
+  /// Reposée à chaque démarrage, et pas seulement à la connexion : la règle
+  /// vit côté compte, et une session ouverte avant ce correctif ne l'aurait
+  /// jamais reçue. Best-effort : un serveur qui refuse ne doit rien bloquer.
   Future<void> activerNotificationsDeReaction() async {
     final client = _client;
-    if (client == null) return;
+    final moi = client?.userID;
+    if (client == null || moi == null) return;
     try {
-      await client.setPushRuleEnabled(
-        PushRuleKind.override,
-        '.m.rule.reaction',
-        false,
+      await client.request(
+        RequestType.PUT,
+        '/client/v3/pushrules/global/override/$regleReactions',
+        data: corpsRegleReactions(moi),
       );
     } catch (e) {
-      // Règle absente sur ce serveur : rien à désactiver, donc rien à signaler.
-      debugPrint('MatrixService: règle de réaction non modifiée ($e)');
+      debugPrint('MatrixService: règle de réaction non posée ($e)');
     }
   }
 

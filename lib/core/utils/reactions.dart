@@ -35,3 +35,31 @@ List<ReactionGroupee> regrouperReactions(
   }
   return parSymbole.values.toList();
 }
+
+/// Identifiant de la règle de push qui fait notifier les réactions à mes
+/// messages (voir `MatrixService.activerNotificationsDeReaction`).
+const regleReactions = 'fr.rempart.reactions_a_mes_messages';
+
+/// Corps de cette règle : une réaction (`m.reaction`) dont le message visé
+/// (`m.annotation`) a été envoyé par [moi].
+///
+/// La seconde condition est celle de MSC3664 (`msc3664_enabled` côté Synapse) :
+/// une règle sur le seul type compterait aussi comme non lues toutes les
+/// réactions que les autres s'échangent dans un groupe. Le son n'est pas
+/// décoratif : sans lui, Synapse pousse un événement en clair en priorité
+/// basse, qu'Android retarde jusqu'à l'ouverture de l'application.
+Map<String, Object?> corpsRegleReactions(String moi) => {
+      'conditions': [
+        {'kind': 'event_match', 'key': 'type', 'pattern': 'm.reaction'},
+        {
+          'kind': 'im.nheko.msc3664.related_event_match',
+          'rel_type': 'm.annotation',
+          'key': 'sender',
+          'pattern': moi,
+        },
+      ],
+      'actions': [
+        'notify',
+        {'set_tweak': 'sound', 'value': 'default'},
+      ],
+    };
