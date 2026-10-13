@@ -362,13 +362,12 @@ class NotificationService {
 
   /// Suite d'un bouton de notification, une fois l'action menée.
   ///
-  /// Une réponse partie s'ajoute à la notification (« Vous : … »), qui reste
-  /// affichée : c'est la confirmation que demande Android. Il refuse de toute
-  /// façon qu'une application retire une notification à laquelle on vient de
-  /// répondre (`FLAG_LIFETIME_EXTENDED_BY_DIRECT_REPLY`, Android 15+) : seule
-  /// une mise à jour lève cette prolongation, et un retrait lancé juste
-  /// derrière annulait la mise à jour avant son affichage (vu sur Android 16).
-  /// Elle part ensuite comme les autres, à l'ouverture de la conversation.
+  /// Une réponse partie retire la notification, comme « Marquer comme lu » :
+  /// la conversation est lue. Jusqu'au 2026-10-13, la réponse y était ajoutée
+  /// (« Vous : … ») ; or en voiture, la notification est déjà retirée quand
+  /// la réponse part, et cette republication en créait une nouvelle, annoncée
+  /// comme un message reçu.
+  ///
   /// Une réponse qui n'est pas partie revient à sa place, avec son texte :
   /// perdue en silence, elle laisserait l'autre sans nouvelles, et celui qui
   /// l'a dictée en voiture croirait avoir répondu.
@@ -380,35 +379,8 @@ class NotificationService {
   }) async {
     final id = roomId.hashCode;
     if (reussi || action != actionRepondre) {
-      final reponse = texte?.trim() ?? '';
-      if (action == actionRepondre && reponse.isNotEmpty && estAndroid) {
-        try {
-          await _plugin.show(
-            id: id,
-            notificationDetails: NotificationDetails(
-              android: AndroidNotificationDetails(
-                _canalId,
-                _canalNom,
-                silent: true,
-                category: AndroidNotificationCategory.message,
-                groupKey: _groupe,
-                actions: actionsDeConversation,
-                // Sans auteur : c'est l'utilisateur lui-même.
-                styleInformation: await _conversation(
-                  id: id,
-                  nouveau: Message(reponse, DateTime.now(), null),
-                ),
-              ),
-            ),
-            payload: roomId,
-          );
-        } catch (e) {
-          debugPrint('NotificationService: réponse non affichée ($e)');
-        }
-        await _resumer();
-        return;
-      }
       await _plugin.cancel(id: id);
+      if (action == actionRepondre) await _leverProlongation(id, roomId);
       await _resumer(retiree: id);
       await effacerVocaux(roomId: roomId);
       return;
@@ -429,6 +401,49 @@ class NotificationService {
       payload: roomId,
     );
     await _resumer();
+  }
+
+  /// Retire une notification à laquelle on vient de répondre depuis le volet.
+  ///
+  /// Android 15+ la garde « prolongée par la réponse directe »
+  /// (`FLAG_LIFETIME_EXTENDED_BY_DIRECT_REPLY`) et refuse que l'application la
+  /// retire : seule une mise à jour lève la prolongation (vu sur Android 16).
+  /// Si elle est encore là, on la republie donc à l'identique, sans message
+  /// neuf, donc sans rien à annoncer, puis on la retire. Le retrait attend que
+  /// la mise à jour soit affichée : lancé aussitôt, il l'annulait avant.
+  /// En voiture, ou avant Android 15, elle est déjà partie et rien ne se fait.
+  ///
+  /// ponytail: deux attentes fixes, faute de signal d'Android ; sur un
+  /// appareil très lent, la notification peut rester, et se balaie.
+  Future<void> _leverProlongation(int id, String roomId) async {
+    final android = _android;
+    if (android == null) return;
+    try {
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      final actives = await android.getActiveNotifications();
+      if (!actives.any((n) => n.id == id)) return;
+      final style = await android.getActiveNotificationMessagingStyle(id: id);
+      if (style == null) return;
+      await _plugin.show(
+        id: id,
+        notificationDetails: NotificationDetails(
+          android: AndroidNotificationDetails(
+            _canalId,
+            _canalNom,
+            silent: true,
+            onlyAlertOnce: true,
+            category: AndroidNotificationCategory.message,
+            groupKey: _groupe,
+            styleInformation: style,
+          ),
+        ),
+        payload: roomId,
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      await _plugin.cancel(id: id);
+    } catch (e) {
+      debugPrint('NotificationService: notification non retirée ($e)');
+    }
   }
 
   /// Les messages déjà affichés pour cette conversation, plus le nouveau.
