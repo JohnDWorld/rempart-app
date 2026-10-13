@@ -10,6 +10,7 @@ import '../../core/utils/apercu_notification.dart';
 import '../../core/utils/demandes.dart';
 import '../models/matrix_extensions.dart';
 import 'client_rempart.dart';
+import 'vocal_notification.dart';
 
 /// Va chercher le contenu réel d'un message annoncé par un push.
 ///
@@ -148,11 +149,13 @@ Future<ApercuNotification?> _apercuDuPush({
     final texte = evenement.texteApercu.trim();
     if (texte.isEmpty) return null;
 
+    // Un vocal porte son son : Android Auto le fait entendre au lieu de lire
+    // « Message vocal » (voir `vocal_notification.dart`).
     return composerApercu(
       texte: texte,
       nomExpediteur: await nomDeLExpediteurPourNotification(evenement),
       nomRoom: evenement.room.name.isEmpty ? null : evenement.room.name,
-    );
+    ).avecAudio(await vocalPourNotification(evenement));
   } catch (e) {
     // Base verrouillée, serveur absent, clés manquantes : rien de tout cela ne
     // doit empêcher la notification neutre de partir.

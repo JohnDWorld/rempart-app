@@ -15,6 +15,7 @@ import 'matrix_service.dart';
 import 'presence_isolate.dart';
 import 'push_contenu.dart';
 import 'statut_presence.dart';
+import 'vocal_notification.dart';
 
 /// Notifications locales des nouveaux messages Matrix.
 ///
@@ -105,6 +106,7 @@ class NotificationService {
       // Écartée d'office : Android ne la retire pas toujours à temps pour la
       // relecture qui suit.
       await _resumer(retiree: roomId.hashCode);
+      await effacerVocaux(roomId: roomId);
     } catch (e) {
       // Le plugin n'est pas initialisé, ou la notification n'existe plus :
       // rien de tout cela ne mérite de remonter à l'utilisateur.
@@ -185,6 +187,8 @@ class NotificationService {
   /// Branche les notifications sur un client Matrix connecté.
   Future<void> ecouter(matrix.Client client) async {
     await init();
+    // Les vocaux de notifications balayées : rien ne prévient l'application.
+    unawaited(effacerVocaux(plusVieuxQue: const Duration(days: 1)));
     // Les boutons des notifications arrivent dans un isolate à part, qui les
     // relaie ici tant que l'application tourne (voir
     // `traiterActionDeNotification`).
@@ -214,6 +218,7 @@ class NotificationService {
     await _reactions?.cancel();
     _reactions = null;
     await _plugin.cancelAll();
+    await effacerVocaux();
   }
 
   /// Notification déclenchée par un push, application éventuellement fermée.
@@ -295,7 +300,13 @@ class NotificationService {
         actions: actionsDeConversation,
         styleInformation: await _conversation(
           id: id,
-          nouveau: Message(texte, DateTime.now(), Person(name: expediteur)),
+          nouveau: Message(
+            texte,
+            DateTime.now(),
+            Person(name: expediteur),
+            dataMimeType: apercu.audio?.mime,
+            dataUri: apercu.audio?.uri,
+          ),
           nomGroupe: apercu.nomGroupe,
         ),
       );
@@ -399,6 +410,7 @@ class NotificationService {
       }
       await _plugin.cancel(id: id);
       await _resumer(retiree: id);
+      await effacerVocaux(roomId: roomId);
       return;
     }
     await _plugin.show(
@@ -604,11 +616,12 @@ class NotificationService {
         return;
       }
 
+      final evenement = await _dechiffre(event);
       final apercu = composerApercu(
-        texte: await _corps(event),
+        texte: texteDeNotification(evenement),
         nomExpediteur: await nomDeLExpediteurPourNotification(event),
         nomRoom: room.name.isEmpty ? null : room.name,
-      );
+      ).avecAudio(await vocalPourNotification(evenement));
 
       await _afficher(id: room.id.hashCode, apercu: apercu, roomId: room.id);
     } catch (e) {
@@ -617,18 +630,14 @@ class NotificationService {
     }
   }
 
-  /// Texte du message, déchiffré si besoin.
-  Future<String> _corps(matrix.Event event) async {
-    var evenement = event;
-    if (evenement.type == matrix.EventTypes.Encrypted) {
-      // L'événement arrive chiffré : sans déchiffrement, le corps est vide.
-      final chiffrement = event.room.client.encryption;
-      if (chiffrement != null) {
-        evenement = await chiffrement.decryptRoomEvent(evenement);
-      }
-    }
-
-    return texteDeNotification(evenement);
+  /// Le message, déchiffré si besoin.
+  Future<matrix.Event> _dechiffre(matrix.Event event) async {
+    if (event.type != matrix.EventTypes.Encrypted) return event;
+    // L'événement arrive chiffré : sans déchiffrement, le corps est vide.
+    final chiffrement = event.room.client.encryption;
+    return chiffrement == null
+        ? event
+        : await chiffrement.decryptRoomEvent(event);
   }
 
   /// Ce que la notification dit d'un message déjà déchiffré.

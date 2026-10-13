@@ -8,6 +8,7 @@ class ApercuNotification {
     this.expediteur,
     this.texte,
     this.nomGroupe,
+    this.audio,
   });
 
   final String titre;
@@ -20,6 +21,21 @@ class ApercuNotification {
   final String? expediteur;
   final String? texte;
   final String? nomGroupe;
+
+  /// Le son d'un vocal (type MIME et adresse `content://`), que la
+  /// notification porte pour qu'Android Auto le fasse entendre au lieu de lire
+  /// « Message vocal » (voir `vocal_notification.dart`).
+  final ({String mime, String uri})? audio;
+
+  ApercuNotification avecAudio(({String mime, String uri})? audio) =>
+      ApercuNotification(
+        titre: titre,
+        corps: corps,
+        expediteur: expediteur,
+        texte: texte,
+        nomGroupe: nomGroupe,
+        audio: audio,
+      );
 }
 
 /// Compose ce qui s'affichera dans le bandeau de notification.

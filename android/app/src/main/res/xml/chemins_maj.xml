@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Ce que le FileProvider des mises a jour accepte de partager : uniquement le
-  sous-dossier ou l'APK telecharge est ecrit. Rien d'autre du stockage de
-  l'application n'est expose a l'installateur d'Android.
+  Ce que le FileProvider de l'application accepte de partager : le sous-dossier
+  ou l'APK telecharge est ecrit, pour l'installateur d'Android, et celui des
+  vocaux joints aux notifications. Rien d'autre du stockage de l'application.
 -->
 <paths>
     <files-path name="maj" path="maj/" />
@@ -10,4 +10,8 @@
          l'APK telecharge par le systeme atterrit donc ici. Ce dossier reste
          propre a l'application et disparait avec elle. -->
     <external-files-path name="maj-externe" path="maj/" />
+    <!-- Les vocaux joints aux notifications, pour qu'Android Auto les fasse
+         entendre (vocal_notification.dart). Dechiffres, ils n'y restent que
+         le temps de la notification. -->
+    <files-path name="vocaux" path="vocaux_notif/" />
 </paths>
