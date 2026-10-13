@@ -2,8 +2,6 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui';
 
-import 'package:audioplayers/audioplayers.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -11,7 +9,6 @@ import 'package:matrix/matrix.dart' as matrix;
 
 import '../../../app/theme.dart';
 import '../../../core/mouvement.dart';
-import '../../../core/plateforme.dart';
 import '../../../core/utils/reactions.dart';
 import '../../../core/utils/secret_message.dart';
 import '../../../data/models/matrix_extensions.dart';
@@ -19,6 +16,7 @@ import '../../../data/providers/providers.dart';
 import '../../../data/providers/taille_texte.dart';
 import '../../../data/providers/vitesse_vocal.dart';
 import '../../../data/services/cache_medias.dart';
+import '../../../data/services/lecteur_vocal.dart';
 import '../../../data/services/matrix_service.dart';
 import '../adaptive/adaptive.dart';
 import '../common/user_avatar.dart';
@@ -1165,94 +1163,18 @@ class _BoutonReponse extends StatelessWidget {
 /// Le téléchargement n'a lieu qu'au premier appui sur « lire », et non à
 /// l'affichage : une conversation pleine de vocaux tirerait sinon plusieurs
 /// mega-octets sans que personne ne les ait demandés.
-class _VocalJoint extends ConsumerStatefulWidget {
+class _VocalJoint extends ConsumerWidget {
   const _VocalJoint({required this.event, required this.isMine});
 
   final matrix.Event event;
   final bool isMine;
-
-  @override
-  ConsumerState<_VocalJoint> createState() => _VocalJointState();
-}
-
-class _VocalJointState extends ConsumerState<_VocalJoint> {
-  final _lecteur = AudioPlayer();
-
-  Uint8List? _octets;
-  bool _chargement = false;
-
-  /// Ce qui a échoué, et à quelle étape. Null tant que tout va bien.
-  ///
-  /// Deux moitiés qui se ressemblent à l'écran et se soignent autrement : le
-  /// vocal n'est pas arrivé, ou il est arrivé et le lecteur n'en veut pas. Un
-  /// message unique les confondait, et envoyait chercher la panne du mauvais
-  /// côté.
-  String? _echec;
-  bool _joue = false;
-
-  /// La source est-elle déjà armée dans le lecteur ?
-  ///
-  /// Sans ce drapeau, chaque appui sur « lire » reposait la source, ce qui
-  /// remet la position à zéro : une pause suivie d'une reprise recommençait
-  /// le vocal depuis le début, et se placer quelque part n'aurait servi à
-  /// rien.
-  bool _sourcePrete = false;
-
-  Duration _position = Duration.zero;
-
-  /// Gardés pour être annulés : la bulle est détruite au défilement, et des
-  /// écoutes laissées derrière appelleraient `setState` sur un widget mort.
-  final _abonnements = <StreamSubscription<dynamic>>[];
-
-  @override
-  void initState() {
-    super.initState();
-    // `release` (le défaut sur Android) libère la source à la fin du vocal :
-    // il faudrait la reposer pour réécouter, et toute position choisie serait
-    // perdue. `stop` garde le lecteur chargé.
-    unawaited(_lecteur.setReleaseMode(ReleaseMode.stop));
-    _abonnements.addAll([
-      _lecteur.onPlayerStateChanged.listen((etat) {
-        if (mounted) setState(() => _joue = etat == PlayerState.playing);
-      }),
-      _lecteur.onPositionChanged.listen((p) {
-        if (mounted) setState(() => _position = p);
-      }),
-      // Les pannes de lecture n'arrivent pas en exception : le lecteur les
-      // pose sur son flux d'evenements, et sans cette ecoute elles se
-      // perdaient dans la zone asynchrone. Le bouton restait alors muet, sans
-      // un mot, ce qui se lit comme une application cassee.
-      _lecteur.eventStream.listen(
-        (_) {},
-        onError: (Object erreur) {
-          debugPrint('MessageBubble: lecture impossible ($erreur)');
-          if (mounted) setState(() => _echec = _echecDeLecture);
-        },
-      ),
-      _lecteur.onPlayerComplete.listen((_) {
-        // Revenir au début : sans cela, un second appui ne relance rien, le
-        // lecteur étant resté à la fin.
-        unawaited(_lecteur.seek(Duration.zero));
-        if (mounted) setState(() => _position = Duration.zero);
-      }),
-    ]);
-  }
-
-  @override
-  void dispose() {
-    for (final abonnement in _abonnements) {
-      unawaited(abonnement.cancel());
-    }
-    unawaited(_lecteur.dispose());
-    super.dispose();
-  }
 
   /// Silhouette envoyée par l'expéditeur (MSC3246), entre 0 et 1024.
   ///
   /// Vide si le message vient d'un client qui n'en met pas : le dessin retombe
   /// alors sur une ligne régulière, plutôt que sur rien.
   List<int> get _formeOnde {
-    final audio = widget.event.content['org.matrix.msc1767.audio'];
+    final audio = event.content['org.matrix.msc1767.audio'];
     final brut = audio is Map ? audio['waveform'] : null;
     if (brut is! List) return const [];
     return [
@@ -1266,96 +1188,68 @@ class _VocalJointState extends ConsumerState<_VocalJoint> {
   /// Zéro si elle manque : un client tiers peut envoyer un audio sans elle. La
   /// barre reste alors à plat, mais la lecture fonctionne.
   Duration get _duree {
-    final info = widget.event.content['info'];
+    final info = event.content['info'];
     final ms = info is Map ? info['duration'] : null;
     return ms is num ? Duration(milliseconds: ms.toInt()) : Duration.zero;
-  }
-
-  /// Télécharge le vocal si besoin et arme la source. Rend faux si rien n'est
-  /// jouable, auquel cas la bulle affiche déjà son échec.
-  Future<bool> _assurerSource() async {
-    if (_sourcePrete) return true;
-    if (_octets == null) {
-      setState(() => _chargement = true);
-      try {
-        final fichier = await widget.event.downloadAndDecryptAttachment();
-        _octets = fichier.bytes;
-      } catch (e) {
-        debugPrint('MessageBubble: vocal non récupéré ($e)');
-        if (mounted) setState(() => _echec = 'Vocal non récupéré');
-        return false;
-      } finally {
-        if (mounted) setState(() => _chargement = false);
-      }
-    }
-    final octets = _octets;
-    if (octets == null) return false;
-    try {
-      // La taille part au journal : un vocal vide ou resté chiffré se
-      // reconnaît là, et pas à l'écran, où les deux se ressemblent.
-      debugPrint('MessageBubble: vocal prêt, ${octets.length} octets');
-      await _lecteur.setSourceBytes(octets, mimeType: 'audio/mp4');
-      _sourcePrete = true;
-      return true;
-    } catch (e) {
-      debugPrint('MessageBubble: lecture impossible ($e)');
-      if (mounted) setState(() => _echec = _echecDeLecture);
-      return false;
-    }
-  }
-
-  Future<void> _basculer() async {
-    if (_joue) {
-      await _lecteur.pause();
-      return;
-    }
-    if (!await _assurerSource()) return;
-    // La vitesse se repose à chaque lecture : selon les plateformes, le
-    // lecteur la ramène à 1 en changeant de source.
-    await _lecteur.setPlaybackRate(ref.read(vitesseVocalProvider));
-    await _lecteur.resume();
   }
 
   /// Se place dans le vocal, [fraction] valant 0 au début et 1 à la fin.
   ///
   /// Ne lance pas la lecture : on peut vouloir se placer avant d'écouter. Si
   /// le vocal joue déjà, il continue depuis le nouveau point.
-  Future<void> _allerA(double fraction) async {
+  Future<void> _allerA(LecteurVocal lecteur, double fraction) async {
     final duree = _duree;
     // Sans durée annoncée (client tiers avare), l'abscisse ne veut rien dire :
     // on ne saurait pas où l'on va.
     if (duree == Duration.zero) return;
-    final cible = duree * fraction.clamp(0.0, 1.0);
-    if (!await _assurerSource()) return;
-    await _lecteur.seek(cible);
-    if (mounted) setState(() => _position = cible);
+    await lecteur.allerA(event, duree * fraction.clamp(0.0, 1.0));
   }
 
   /// Passe au cran de vitesse suivant, pour ce vocal et tous les autres.
-  void _vitesseSuivante() {
+  void _vitesseSuivante(WidgetRef ref, LecteurVocal lecteur) {
     final suivante = vitesseSuivante(ref.read(vitesseVocalProvider));
     ref.read(vitesseVocalProvider.notifier).state = suivante;
-    // En cours d'écoute, le changement doit s'entendre tout de suite.
-    if (_joue) unawaited(_lecteur.setPlaybackRate(suivante));
+    lecteur.changerVitesse(suivante);
   }
 
-  String _mmss(Duration d) {
+  static String _mmss(Duration d) {
     final m = d.inMinutes.toString().padLeft(2, '0');
     final s = (d.inSeconds % 60).toString().padLeft(2, '0');
     return '$m:$s';
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final lecteur = LecteurVocal.instance;
+    final cle = cleMedia(event);
+    // Lue ici et non dans le constructeur ci-dessous : Riverpod n'accepte
+    // `watch` que pendant la construction de CE widget.
+    final vitesse = ref.watch(vitesseVocalProvider);
+    return ListenableBuilder(
+      listenable: lecteur,
+      builder: (context, _) => _dessiner(context, ref, lecteur, cle, vitesse),
+    );
+  }
+
+  Widget _dessiner(
+    BuildContext context,
+    WidgetRef ref,
+    LecteurVocal lecteur,
+    String cle,
+    double vitesse,
+  ) {
     final theme = Theme.of(context);
+    final position = lecteur.position(cle);
+    final joue = lecteur.joue(cle);
+    final chargement = lecteur.enChargement(cle);
     final couleur =
-        widget.isMine ? theme.colorScheme.onPrimary : theme.colorScheme.onSurfaceVariant;
+        isMine ? theme.colorScheme.onPrimary : theme.colorScheme.onSurfaceVariant;
     final duree = _duree;
     final avancement = duree.inMilliseconds > 0
-        ? (_position.inMilliseconds / duree.inMilliseconds).clamp(0.0, 1.0)
+        ? (position.inMilliseconds / duree.inMilliseconds).clamp(0.0, 1.0)
         : 0.0;
 
-    final echec = _echec;
+    final echec = lecteur.echec(cle);
     if (echec != null) {
       // Sur le web, la cause est presque toujours la meme et elle ne vient pas
       // de Rempart : le vocal est de l'AAC dans un M4A, format qu'un
@@ -1390,12 +1284,19 @@ class _VocalJointState extends ConsumerState<_VocalJoint> {
             mainAxisSize: MainAxisSize.min,
             children: [
               IconButton(
-                onPressed: _chargement ? null : _basculer,
+                onPressed: chargement
+                    ? null
+                    : () => unawaited(
+                          lecteur.basculer(
+                            event,
+                            vitesse: ref.read(vitesseVocalProvider),
+                          ),
+                        ),
                 // Sans elle, TalkBack et VoiceOver annonçaient « bouton », sans
                 // dire s'il lance ou arrête, sur le geste central du vocal.
-                tooltip: _joue ? 'Pause' : 'Écouter le vocal',
+                tooltip: joue ? 'Pause' : 'Écouter le vocal',
                 visualDensity: VisualDensity.compact,
-                icon: _chargement
+                icon: chargement
                     ? SizedBox(
                         width: 20,
                         height: 20,
@@ -1405,7 +1306,7 @@ class _VocalJointState extends ConsumerState<_VocalJoint> {
                         ),
                       )
                     : Icon(
-                        _joue ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                        joue ? Icons.pause_rounded : Icons.play_arrow_rounded,
                         color: couleur,
                       ),
               ),
@@ -1425,12 +1326,13 @@ class _VocalJointState extends ConsumerState<_VocalJoint> {
                       // l'oreille, elle ne disait rien. Elle annonce
                       // maintenant où l'on en est.
                       label: 'Progression du vocal',
-                      value: '${_mmss(_position)} sur ${_mmss(duree)}',
+                      value: '${_mmss(position)} sur ${_mmss(duree)}',
                       child: LayoutBuilder(
                         builder: (context, contraintes) => GestureDetector(
                           behavior: HitTestBehavior.opaque,
                           onTapDown: (details) => unawaited(
                             _allerA(
+                              lecteur,
                               details.localPosition.dx / contraintes.maxWidth,
                             ),
                           ),
@@ -1452,9 +1354,9 @@ class _VocalJointState extends ConsumerState<_VocalJoint> {
                 ),
               ),
               _BoutonVitesse(
-                vitesse: ref.watch(vitesseVocalProvider),
+                vitesse: vitesse,
                 couleur: couleur,
-                onTap: _vitesseSuivante,
+                onTap: () => _vitesseSuivante(ref, lecteur),
               ),
             ],
           ),
@@ -1463,8 +1365,8 @@ class _VocalJointState extends ConsumerState<_VocalJoint> {
           Padding(
             padding: const EdgeInsets.only(left: 48),
             child: Text(
-              _position > Duration.zero
-                  ? '${_mmss(_position)} / ${_mmss(duree)}'
+              position > Duration.zero
+                  ? '${_mmss(position)} / ${_mmss(duree)}'
                   : _mmss(duree),
               style: theme.textTheme.bodySmall?.copyWith(
                 color: couleur,
@@ -1476,17 +1378,6 @@ class _VocalJointState extends ConsumerState<_VocalJoint> {
     );
   }
 }
-
-/// Ce qu'on dit quand le vocal est bien arrivé mais ne se lit pas.
-///
-/// Sur le web, la cause la plus courante ne vient pas de Rempart : le vocal
-/// est de l'AAC dans un M4A, et un navigateur sans codec propriétaire refuse
-/// de le décoder. Mesuré : Opera sous Linux rend une chaîne vide à
-/// `canPlayType('audio/mp4; codecs="mp4a.40.2"')` là où Chrome rend
-/// « probably ». Dire « vocal illisible » ferait accuser le message, qui est
-/// intact et s'écoute ailleurs.
-final _echecDeLecture =
-    estWeb ? 'Ce navigateur ne lit pas ce format' : 'Vocal illisible';
 
 /// Le cran de vitesse, en bout de bulle.
 ///

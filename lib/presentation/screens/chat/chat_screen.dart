@@ -27,6 +27,7 @@ import '../../../data/models/matrix_extensions.dart';
 import '../../../data/providers/providers.dart';
 import '../../../data/services/compression_image.dart';
 import '../../../data/services/enregistreur_vocal.dart';
+import '../../../data/services/lecteur_vocal.dart';
 import '../../../data/services/notification_service.dart';
 import '../../../data/services/partage_entrant.dart';
 import '../../../data/services/reinitialisation_e2e.dart';
@@ -146,6 +147,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     if (NotificationService.instance.roomOuverte == widget.conversationId) {
       NotificationService.instance.roomOuverte = null;
     }
+    // Le lecteur des vocaux vit hors des bulles : il continuerait sinon de
+    // jouer une conversation qu'on a quittée.
+    unawaited(LecteurVocal.instance.arreter());
     _itemPositionsListener.itemPositions.removeListener(_surDefilement);
     _retour.dispose();
     _highlightTimer?.cancel();
