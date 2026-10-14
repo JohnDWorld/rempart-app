@@ -133,67 +133,90 @@ class EnregistreurVocal {
     final dossier = await getTemporaryDirectory();
     final chemin =
         '${dossier.path}/vocal_${DateTime.now().millisecondsSinceEpoch}.m4a';
-    await _enregistreur.start(
-      const RecordConfig(
-        // Explicite bien que ce soit le defaut du paquet : ce format decide de
-        // qui pourra ecouter le vocal, il ne doit pas changer dans notre dos a
-        // la faveur d'une mise a jour.
-        // ignore: avoid_redundant_argument_values
-        encoder: AudioEncoder.aacLc,
-        // Reglages volontairement ORDINAIRES. Un encodeur AAC materiel n'est
-        // pas un logiciel : hors de ses combinaisons usuelles, il n'echoue pas
-        // proprement, il ecrit quelques trames puis s'arrete. Le fichier
-        // parait valide, se lit une seconde et se tait, alors que la duree
-        // annoncee est la bonne. C'est ce qui est arrive avec 32 kbit/s a
-        // 24 kHz laisses en STEREO (le mono avait saute) : 7 Ko pour un
-        // message de plusieurs secondes.
-        numChannels: 1,
-        // Redondant avec le defaut, et garde tel quel : c'est en supprimant
-        // une de ces lignes « inutiles » pour satisfaire le lint que le mono
-        // a saute, et avec lui la lisibilite des vocaux.
-        // ignore: avoid_redundant_argument_values
-        sampleRate: 44100,
-        bitRate: 64000,
-        // MediaRecorder plutot que le chemin AudioRecord + MediaCodec.
-        //
-        // Le paquet le dit de ses deux implementations : l'avancee « unlocks
-        // additionnal features », la seconde est « stability oriented », et
-        // « legacy does NOT mean obsolete ». Or les fonctions avancees ne nous
-        // servent a rien ici, tandis que la troncature nous a coute deux
-        // allers-retours : un vocal de plusieurs secondes rendu en une, sans
-        // la moindre erreur.
-        //
-        // Le format ne change pas (MPEG_4 + AAC-LC, donc le meme M4A), le
-        // debit, la frequence et le mono sont respectes a l'identique, et
-        // l'amplitude reste lue (getMaxAmplitude) : la silhouette survit.
-        androidConfig: AndroidRecordConfig(
-          useLegacy: true,
-          // LE MICRO DU TELEPHONE, jamais celui d'un kit Bluetooth.
+    // La musique des autres applications se met en pause AVANT le premier son
+    // capté, et reprend seule à la fin (voir « focusAudio » côté Android).
+    await _reglageAndroid('focusAudio', true);
+    try {
+      await _enregistreur.start(
+        RecordConfig(
+          // Explicite bien que ce soit le defaut du paquet : ce format decide de
+          // qui pourra ecouter le vocal, il ne doit pas changer dans notre dos a
+          // la faveur d'une mise a jour.
+          // ignore: avoid_redundant_argument_values
+          encoder: AudioEncoder.aacLc,
+          // Reglages volontairement ORDINAIRES. Un encodeur AAC materiel n'est
+          // pas un logiciel : hors de ses combinaisons usuelles, il n'echoue pas
+          // proprement, il ecrit quelques trames puis s'arrete. Le fichier
+          // parait valide, se lit une seconde et se tait, alors que la duree
+          // annoncee est la bonne. C'est ce qui est arrive avec 32 kbit/s a
+          // 24 kHz laisses en STEREO (le mono avait saute) : 7 Ko pour un
+          // message de plusieurs secondes.
+          numChannels: 1,
+          // Redondant avec le defaut, et garde tel quel : c'est en supprimant
+          // une de ces lignes « inutiles » pour satisfaire le lint que le mono
+          // a saute, et avec lui la lisibilite des vocaux.
+          // ignore: avoid_redundant_argument_values
+          sampleRate: 44100,
+          bitRate: 64000,
+          // Pas le focus audio DÉFINITIF que le paquet prend par défaut :
+          // Spotify s'arrêtait pour de bon et ne reprenait pas après le vocal.
+          // Rempart prend lui-même un focus temporaire (ci-dessus). Sur iOS, le
+          // défaut reste : il met l'enregistrement en pause pendant un appel.
+          audioInterruption: estAndroid
+              ? AudioInterruptionMode.none
+              // ignore: avoid_redundant_argument_values
+              : AudioInterruptionMode.pause,
+          // MediaRecorder plutot que le chemin AudioRecord + MediaCodec.
           //
-          // Le defaut laisse Android router vers le peripherique connecte. En
-          // voiture, la source devient alors le micro mains-libres, qui
-          // n'echantillonne qu'a 8 kHz (la bande du telephone) : le vocal part
-          // complet, de taille normale, mais sonne etouffe et metallique,
-          // parce que le son d'origine ne porte que 4 kHz de bande passante.
-          // Encoder a 44100 Hz n'y change rien, on ne restitue pas ce qui n'a
-          // jamais ete capte.
+          // Le paquet le dit de ses deux implementations : l'avancee « unlocks
+          // additionnal features », la seconde est « stability oriented », et
+          // « legacy does NOT mean obsolete ». Or les fonctions avancees ne nous
+          // servent a rien ici, tandis que la troncature nous a coute deux
+          // allers-retours : un vocal de plusieurs secondes rendu en une, sans
+          // la moindre erreur.
           //
-          // C'est le choix de WhatsApp, et il a un prix : le telephone pose
-          // sur un support capte une voix plus lointaine que le micro du
-          // volant. Une voix lointaine mais nette vaut mieux qu'une voix
-          // proche et sourde, et surtout elle ne depend pas de ce qui est
-          // connecte au moment ou l'on parle.
-          audioSource: AndroidAudioSource.mic,
+          // Le format ne change pas (MPEG_4 + AAC-LC, donc le meme M4A), le
+          // debit, la frequence et le mono sont respectes a l'identique, et
+          // l'amplitude reste lue (getMaxAmplitude) : la silhouette survit.
+          androidConfig: AndroidRecordConfig(
+            useLegacy: true,
+            // LE MICRO DU TELEPHONE, jamais celui d'un kit Bluetooth.
+            //
+            // Le defaut laisse Android router vers le peripherique connecte. En
+            // voiture, la source devient alors le micro mains-libres, qui
+            // n'echantillonne qu'a 8 kHz (la bande du telephone) : le vocal part
+            // complet, de taille normale, mais sonne etouffe et metallique,
+            // parce que le son d'origine ne porte que 4 kHz de bande passante.
+            // Encoder a 44100 Hz n'y change rien, on ne restitue pas ce qui n'a
+            // jamais ete capte.
+            //
+            // C'est le choix de WhatsApp, et il a un prix : le telephone pose
+            // sur un support capte une voix plus lointaine que le micro du
+            // volant. Une voix lointaine mais nette vaut mieux qu'une voix
+            // proche et sourde, et surtout elle ne depend pas de ce qui est
+            // connecte au moment ou l'on parle.
+            audioSource: AndroidAudioSource.mic,
+            // Et surtout PAS de liaison Bluetooth « appel » vers la voiture :
+            // activée par défaut, elle y basculait le son de communication
+            // (`setCommunicationDevice`), la voiture passait en mode téléphone,
+            // coupait la musique puis la relançait par le canal d'appel, réglé
+            // bien plus fort (relevé le 2026-10-14). Elle ne servait à rien,
+            // le micro étant celui du téléphone.
+            manageBluetooth: false,
+          ),
         ),
-      ),
-      path: chemin,
-    );
+        path: chemin,
+      );
+    } catch (_) {
+      await _reglageAndroid('focusAudio', false);
+      rethrow;
+    }
     _chemin = chemin;
     _temps.demarrer();
     _cycle = AppLifecycleListener(onHide: _suspendre, onShow: _reprendre);
     // La veille automatique de l'écran est le cas courant : on l'empêche le
     // temps de l'enregistrement, comme un lecteur vidéo.
-    unawaited(_garderEcranAllume(true));
+    unawaited(_reglageAndroid('garderEcranAllume', true));
     _amplitudes.clear();
     // Dix mesures par seconde : assez pour que la silhouette suive la voix,
     // assez peu pour qu'un message de deux minutes ne remplisse pas
@@ -277,17 +300,20 @@ class EnregistreurVocal {
   void _fermerCycle() {
     _cycle?.dispose();
     _cycle = null;
-    unawaited(_garderEcranAllume(false));
+    unawaited(_reglageAndroid('garderEcranAllume', false));
+    unawaited(_reglageAndroid('focusAudio', false));
   }
 
-  /// Android seul, où le défaut a été vu. Ailleurs, la pause au départ de
-  /// l'écran suffit à ne pas enregistrer de vide.
-  Future<void> _garderEcranAllume(bool allume) async {
+  /// Un réglage d'Android le temps du vocal (`garderEcranAllume`,
+  /// `focusAudio`), posé au départ et retiré à la fin. Android seul, où les
+  /// défauts ont été vus ; ailleurs, la pause au départ de l'écran suffit à ne
+  /// pas enregistrer de vide.
+  Future<void> _reglageAndroid(String methode, bool actif) async {
     if (!estAndroid) return;
     try {
-      await _canal.invokeMethod<void>('garderEcranAllume', allume);
+      await _canal.invokeMethod<void>(methode, actif);
     } catch (e) {
-      debugPrint('Vocal: veille de l ecran non reglee ($e)');
+      debugPrint('Vocal: $methode non regle ($e)');
     }
   }
 

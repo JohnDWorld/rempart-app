@@ -2,6 +2,9 @@ package com.sovereign.rempart_app
 
 import android.content.Context
 import android.content.Intent
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -29,6 +32,13 @@ class MainActivity : FlutterActivity() {
 
     /** Previent Flutter qu'un partage vient d'arriver, application ouverte. */
     private var canalPartage: MethodChannel? = null
+
+    /**
+     * Le focus audio pris le temps d'un vocal (voir "focusAudio"). L'ecouteur
+     * ne fait rien : la pause au depart de l'ecran couvre deja un appel.
+     */
+    private var demandeFocus: AudioFocusRequest? = null
+    private val ecouteFocus = AudioManager.OnAudioFocusChangeListener { }
 
     /**
      * Clavier fantome : au retour dans l'application, un espace vide de la
@@ -218,6 +228,48 @@ class MainActivity : FlutterActivity() {
                         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                     } else {
                         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    }
+                    reponse.success(null)
+                }
+
+                // Pendant un vocal : la musique des autres applications
+                // (Spotify, la radio de la voiture) se met en pause, et reprend
+                // seule a la fin. Transitoire et exclusif : un lecteur s'arrete
+                // au lieu de baisser le son, et reprend quand on rend la main.
+                // Le focus DEFINITIF que prenait le greffon d'enregistrement
+                // arretait Spotify pour de bon : il fallait relancer la musique
+                // a la main apres chaque vocal.
+                "focusAudio" -> {
+                    val audio = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+                    if (appel.arguments == true) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            val demande = AudioFocusRequest.Builder(
+                                AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE,
+                            )
+                                .setAudioAttributes(
+                                    AudioAttributes.Builder()
+                                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                                        .build(),
+                                )
+                                .setOnAudioFocusChangeListener(ecouteFocus)
+                                .build()
+                            demandeFocus = demande
+                            audio.requestAudioFocus(demande)
+                        } else {
+                            @Suppress("DEPRECATION")
+                            audio.requestAudioFocus(
+                                ecouteFocus,
+                                AudioManager.STREAM_MUSIC,
+                                AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE,
+                            )
+                        }
+                    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        demandeFocus?.let { audio.abandonAudioFocusRequest(it) }
+                        demandeFocus = null
+                    } else {
+                        @Suppress("DEPRECATION")
+                        audio.abandonAudioFocus(ecouteFocus)
                     }
                     reponse.success(null)
                 }
