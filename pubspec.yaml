@@ -1,7 +1,7 @@
 name: rempart_app
 description: Rempart - Messagerie souveraine avec chiffrement E2E
 publish_to: 'none'
-version: 1.0.0+107
+version: 1.0.0+108
 environment:
   sdk: '>=3.3.0 <4.0.0'
 
@@ -83,6 +83,9 @@ dependencies:
   # file_picker (win32 ^5.9). win32 ne concerne que les builds Windows.
   share_plus: ^12.0.0
   url_launcher: ^6.3.2
+  # Deja tire par supabase_flutter : declare ici pour lire les liens de
+  # contact (voir lien_contact_entrant.dart), a la version qu'il impose.
+  app_links: ^7.2.0
 
   # ===========================================
   # MEDIA (pieces jointes)

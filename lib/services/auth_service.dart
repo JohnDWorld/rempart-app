@@ -226,6 +226,7 @@ class AuthService {
     required String email,
     required String password,
     String? displayName,
+    String? username,
   }) async {
     // 1. Inscription Supabase, avec la valeur dérivée : le mot de passe ne
     // quitte pas l'appareil (voir `derivation_mot_de_passe.dart`).
@@ -243,6 +244,9 @@ class AuthService {
       emailRedirectTo: 'https://rempart-messenger.fr/adresse-confirmee.html',
       data: {
         if (displayName != null) 'display_name': displayName,
+        // Le déclencheur `handle_new_user` le reprend s'il est permis et
+        // libre, et en tire un au hasard sinon : jamais l'adresse e-mail.
+        if (username != null) 'username': username,
         cleVersionMotDePasse: 2,
       },
     );

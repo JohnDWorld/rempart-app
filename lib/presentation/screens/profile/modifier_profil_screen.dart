@@ -5,13 +5,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../app/theme.dart';
+import '../../../core/utils/nom_utilisateur.dart';
 import '../../../data/providers/providers.dart';
+import '../../../data/services/profile_service.dart';
 import '../../widgets/adaptive/adaptive.dart';
 import '../../widgets/common/user_avatar.dart';
 
-/// Édition de son propre profil : photo, nom affiché, bio.
+/// Édition de son propre profil : photo, nom affiché, nom d'utilisateur, bio.
 ///
-/// Les trois vivent dans Supabase, source de vérité des identités. Le nom est
+/// Tous vivent dans Supabase, source de vérité des identités. Le nom est
 /// en plus recopié dans le profil Matrix : c'est celui que lisent les bots
 /// pour savoir qui a écrit quoi dans un groupe.
 class ModifierProfilScreen extends ConsumerStatefulWidget {
@@ -24,7 +26,11 @@ class ModifierProfilScreen extends ConsumerStatefulWidget {
 
 class _ModifierProfilScreenState extends ConsumerState<ModifierProfilScreen> {
   final _nomController = TextEditingController();
+  final _nomUtilisateurController = TextEditingController();
   final _bioController = TextEditingController();
+
+  /// Le refus du nom d'utilisateur (règles ou déjà pris), sous le champ.
+  String? _erreurNomUtilisateur;
 
   /// Vrai tant que les champs n'ont pas reçu les valeurs du profil chargé.
   /// Sans ce drapeau, chaque reconstruction écraserait la saisie en cours.
@@ -36,6 +42,7 @@ class _ModifierProfilScreenState extends ConsumerState<ModifierProfilScreen> {
   @override
   void dispose() {
     _nomController.dispose();
+    _nomUtilisateurController.dispose();
     _bioController.dispose();
     super.dispose();
   }
@@ -47,6 +54,7 @@ class _ModifierProfilScreenState extends ConsumerState<ModifierProfilScreen> {
 
     if (profil != null && !_champsRemplis) {
       _nomController.text = profil.displayName ?? profil.username;
+      _nomUtilisateurController.text = profil.username;
       _bioController.text = profil.bio ?? '';
       _champsRemplis = true;
     }
@@ -106,6 +114,21 @@ class _ModifierProfilScreenState extends ConsumerState<ModifierProfilScreen> {
           ),
           const SizedBox(height: RempartTokens.espaceL),
           AdaptiveTextField(
+            controller: _nomUtilisateurController,
+            label: "Nom d'utilisateur",
+            placeholder: 'marie.dupont',
+            prefix: const Icon(Icons.alternate_email),
+            autocorrect: false,
+            textInputAction: TextInputAction.next,
+            errorText: _erreurNomUtilisateur,
+            onChanged: (_) {
+              if (_erreurNomUtilisateur != null) {
+                setState(() => _erreurNomUtilisateur = null);
+              }
+            },
+          ),
+          const SizedBox(height: RempartTokens.espaceL),
+          AdaptiveTextField(
             controller: _bioController,
             label: 'Bio',
             placeholder: 'Quelques mots sur vous (facultatif)',
@@ -113,8 +136,9 @@ class _ModifierProfilScreenState extends ConsumerState<ModifierProfilScreen> {
           ),
           const SizedBox(height: RempartTokens.espaceL),
           Text(
-            'Votre identifiant et votre adresse e-mail ne changent pas : '
-            'ils identifient votre compte.',
+            "Votre nom d'utilisateur est unique : c'est par lui qu'on vous "
+            'trouve sans vous confondre avec un homonyme. Votre adresse '
+            "e-mail, elle, n'est montrée à personne et ne change pas ici.",
             style: theme.textTheme.bodySmall
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
@@ -189,8 +213,38 @@ class _ModifierProfilScreenState extends ConsumerState<ModifierProfilScreen> {
       return;
     }
 
+    // Seulement s'il a changé : un ancien nom, tiré de l'adresse, peut
+    // enfreindre les règles d'aujourd'hui, et ne doit pas empêcher de changer
+    // de bio.
+    final profil = ref.read(currentProfileProvider).value;
+    final saisie = _nomUtilisateurController.text.trim();
+    final nomUtilisateur = normaliserNomUtilisateur(saisie);
+    final changeDeNom = profil != null && saisie != profil.username;
+    if (changeDeNom) {
+      final probleme = problemeNomUtilisateur(nomUtilisateur);
+      if (probleme != null) {
+        setState(() => _erreurNomUtilisateur = probleme);
+        return;
+      }
+    }
+
     setState(() => _enregistrement = true);
     try {
+      // Le nom d'abord : c'est lui qui peut être refusé (déjà pris), et rien
+      // d'autre ne doit être enregistré à moitié.
+      if (changeDeNom) {
+        try {
+          await ref
+              .read(profileServiceProvider)
+              .changerNomUtilisateur(nomUtilisateur);
+        } on NomUtilisateurRefuse catch (refus) {
+          setState(() {
+            _erreurNomUtilisateur =
+                messageRefusNomUtilisateur(refus.raison, nomUtilisateur);
+          });
+          return;
+        }
+      }
       await ref.read(profileServiceProvider).updateProfile(
             displayName: nom,
             bio: _bioController.text.trim(),

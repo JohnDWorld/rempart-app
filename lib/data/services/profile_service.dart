@@ -5,6 +5,14 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/constants/supabase_constants.dart';
 import '../models/profile.dart';
 
+/// Un nom d'utilisateur refusé par la base ; [raison] vaut `pris` ou l'une
+/// des règles (`longueur`, `caracteres`, `reserve`).
+class NomUtilisateurRefuse implements Exception {
+  const NomUtilisateurRefuse(this.raison);
+
+  final String raison;
+}
+
 /// Service pour la gestion des profils utilisateurs
 class ProfileService {
   ProfileService(this._client);
@@ -18,40 +26,68 @@ class ProfileService {
     return getProfile(userId);
   }
 
-  /// Récupérer un profil par ID
+  /// Récupérer un profil par ID.
+  ///
+  /// Par la fonction bornée `profils_par_id`, pas par la table : la lecture
+  /// directe des profils des autres se referme (migration du 2026-10-15), et
+  /// tout compte connecté pouvait jusque-là tirer l'annuaire entier.
   Future<Profile?> getProfile(String userId) async {
-    final response =
-        await _client.from('profiles').select().eq('id', userId).maybeSingle();
-
-    if (response == null) return null;
-    return Profile.fromJson(response);
+    final profils = await profilsParId([userId]);
+    return profils.isEmpty ? null : profils.first;
   }
 
-  /// Récupérer un profil par username
+  /// Les profils de ces identifiants (ceux que portent les identifiants
+  /// Matrix `@u_<id>`). La base en rend deux cents au plus.
+  Future<List<Profile>> profilsParId(List<String> ids) async {
+    if (ids.isEmpty) return const [];
+    final reponse =
+        await _client.rpc<List<dynamic>>('profils_par_id', params: {'ids': ids});
+    return _profils(reponse);
+  }
+
+  /// Le profil de qui porte exactement ce nom d'utilisateur (casse ignorée).
+  ///
+  /// C'est la seule façon de trouver quelqu'un avec qui l'on ne partage
+  /// encore rien : le nom affiché ne se cherche que parmi ses contacts, sans
+  /// quoi l'annuaire se parcourrait lettre par lettre.
   Future<Profile?> getProfileByUsername(String username) async {
-    final response = await _client
-        .from('profiles')
-        .select()
-        .eq('username', username)
-        .maybeSingle();
-
-    if (response == null) return null;
-    return Profile.fromJson(response);
+    final reponse = await _client.rpc<List<dynamic>>(
+      'profil_par_nom_utilisateur',
+      params: {'nom': username},
+    );
+    final profils = _profils(reponse);
+    return profils.isEmpty ? null : profils.first;
   }
 
-  /// Rechercher des profils par nom ou username
-  Future<List<Profile>> searchProfiles(String query) async {
-    final response = await _client
-        .from('profiles')
-        .select()
-        .or('username.ilike.%$query%,display_name.ilike.%$query%')
-        .neq('id', _client.auth.currentUser?.id ?? '')
-        .limit(20);
+  /// Null si [nom] est libre et permis, sinon la raison du refus (`pris`, ou
+  /// l'une des règles, voir `messageRefusNomUtilisateur`). Répond aussi sans
+  /// compte : on choisit son nom avant que l'inscription n'ouvre une session.
+  Future<String?> nomUtilisateurRefuse(String nom) =>
+      _client.rpc<String?>('nom_utilisateur_disponible', params: {'nom': nom});
 
-    return (response as List)
-        .map((p) => Profile.fromJson(p as Map<String, dynamic>))
-        .toList();
+  /// Change son nom d'utilisateur. Lève [NomUtilisateurRefuse] si la base le
+  /// refuse : pris (contrainte d'unicité) ou hors des règles (le déclencheur
+  /// `normaliser_nom_utilisateur`, qui lève `nom_utilisateur_<raison>`).
+  Future<void> changerNomUtilisateur(String nom) async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) throw Exception('Utilisateur non connecté');
+    try {
+      await _client.from('profiles').update({'username': nom}).eq('id', userId);
+    } on PostgrestException catch (e) {
+      if (e.code == '23505') throw const NomUtilisateurRefuse('pris');
+      if (e.code == '23514' && e.message.startsWith('nom_utilisateur_')) {
+        throw NomUtilisateurRefuse(
+          e.message.substring('nom_utilisateur_'.length),
+        );
+      }
+      rethrow;
+    }
   }
+
+  List<Profile> _profils(List<dynamic> lignes) => [
+        for (final ligne in lignes)
+          Profile.fromJson(ligne as Map<String, dynamic>),
+      ];
 
   /// Mettre à jour le profil
   Future<Profile> updateProfile({

@@ -1801,6 +1801,27 @@ class MatrixService {
         '${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
   }
 
+  /// Les identifiants Supabase des personnes dont le nom correspond à
+  /// [terme], parmi celles avec qui l'on partage une conversation.
+  ///
+  /// L'annuaire de Synapse ne rend que celles-là (`search_all_users` à faux,
+  /// le défaut, que rien ne change dans `homeserver.yaml`) : c'est lui qui
+  /// borne la recherche par nom affiché, sans liste de contacts à tenir, et
+  /// sans membres manquants (il ne dépend pas de l'état chargé des salons).
+  /// Les bots en sont écartés, comme soi-même.
+  Future<List<String>> contactsCorrespondants(String terme) async {
+    final client = _client;
+    if (client == null || !client.isLogged()) return const [];
+    final reponse = await client.searchUserDirectory(terme, limit: 20);
+    final ids = <String>[];
+    for (final utilisateur in reponse.results) {
+      if (utilisateur.userId == client.userID) continue;
+      final id = supabaseIdFromMatrixUserId(utilisateur.userId);
+      if (id != null) ids.add(id);
+    }
+    return ids;
+  }
+
   /// Extrait le nom local d'un ID Matrix
   String getLocalpart(String userId) {
     if (userId.startsWith('@')) {

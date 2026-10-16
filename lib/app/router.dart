@@ -27,6 +27,7 @@ import '../presentation/screens/legal/politique_confidentialite_screen.dart';
 import '../presentation/screens/profile/add_members_screen.dart';
 import '../presentation/screens/profile/group_info_screen.dart';
 import '../presentation/screens/profile/modifier_profil_screen.dart';
+import '../presentation/screens/profile/mon_code_screen.dart';
 import '../presentation/screens/profile/user_info_screen.dart';
 import '../presentation/screens/settings/appareils_screen.dart';
 import '../presentation/screens/settings/changer_mot_de_passe_screen.dart';
@@ -258,6 +259,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/profil/modifier',
         name: 'modifier-profil',
         builder: (context, state) => const ModifierProfilScreen(),
+      ),
+
+      GoRoute(
+        path: '/mon-code',
+        name: 'mon-code',
+        builder: (context, state) => const MonCodeScreen(),
       ),
 
       // Settings

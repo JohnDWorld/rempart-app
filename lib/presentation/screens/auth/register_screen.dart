@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/plateforme.dart';
+import '../../../core/utils/nom_utilisateur.dart';
 import '../../../core/utils/regles_mot_de_passe.dart';
 import '../../../data/providers/providers.dart';
 import '../../../services/auth_service.dart';
@@ -23,6 +24,7 @@ class RegisterScreen extends ConsumerStatefulWidget {
 class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
   final _displayNameController = TextEditingController();
+  final _usernameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
@@ -33,9 +35,18 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   bool _acceptTerms = false;
   String? _errorMessage;
 
+  /// Vrai dès qu'on a touché au nom d'utilisateur : il cesse alors de suivre
+  /// le nom d'affichage, sans quoi la suggestion écraserait le choix.
+  bool _usernameSaisi = false;
+
+  /// Le refus de la base (nom déjà pris), affiché sous le champ jusqu'à la
+  /// prochaine frappe.
+  String? _erreurUsername;
+
   @override
   void dispose() {
     _displayNameController.dispose();
+    _usernameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
@@ -58,11 +69,23 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     });
 
     try {
+      final username = normaliserNomUtilisateur(_usernameController.text);
+      // La base tranche (nom pris entre-temps) : mieux vaut le dire ici que
+      // laisser l'inscription en tirer un au hasard.
+      final refus = await _refusDuNom(username);
+      if (refus != null) {
+        setState(() {
+          _erreurUsername = messageRefusNomUtilisateur(refus, username);
+        });
+        return;
+      }
+
       final authService = ref.read(authServiceProvider);
       final response = await authService.signUp(
         email: _emailController.text.trim(),
         password: _passwordController.text,
         displayName: _displayNameController.text.trim(),
+        username: username,
       );
 
       if (mounted) {
@@ -84,6 +107,18 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           _isLoading = false;
         });
       }
+    }
+  }
+
+  /// Le refus de la base pour [username], ou null. Une base injoignable ne
+  /// bloque pas : l'inscription, elle, ne bloque jamais sur le nom (la base
+  /// en tire un au hasard), et s'il le faut, il se change ensuite.
+  Future<String?> _refusDuNom(String username) async {
+    try {
+      return await ref.read(profileServiceProvider).nomUtilisateurRefuse(username);
+    } catch (e) {
+      debugPrint('Inscription : disponibilité du nom inconnue ($e)');
+      return null;
     }
   }
 
@@ -329,6 +364,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         hintText: 'Comment voulez-vous être appelé ?',
                         prefixIcon: Icon(Icons.person_outlined),
                       ),
+                      onChanged: (value) {
+                        if (_usernameSaisi) return;
+                        _usernameController.text =
+                            suggestionNomUtilisateur(value);
+                      },
                       validator: (value) {
                         if (value == null || value.isEmpty) {
                           return 'Veuillez entrer votre nom';
@@ -338,6 +378,33 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         }
                         return null;
                       },
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Nom d'utilisateur : ce qui distingue deux homonymes.
+                    // Proposé d'après le nom d'affichage tant qu'on n'y
+                    // touche pas.
+                    TextFormField(
+                      controller: _usernameController,
+                      textInputAction: TextInputAction.next,
+                      autocorrect: false,
+                      enableSuggestions: false,
+                      decoration: const InputDecoration(
+                        labelText: "Nom d'utilisateur",
+                        hintText: 'marie.dupont',
+                        helperText: "Unique : c'est par lui qu'on vous trouve",
+                        prefixIcon: Icon(Icons.alternate_email),
+                      ),
+                      forceErrorText: _erreurUsername,
+                      onChanged: (_) {
+                        _usernameSaisi = true;
+                        if (_erreurUsername != null) {
+                          setState(() => _erreurUsername = null);
+                        }
+                      },
+                      validator: (value) => problemeNomUtilisateur(
+                        normaliserNomUtilisateur(value ?? ''),
+                      ),
                     ),
                     const SizedBox(height: 16),
 

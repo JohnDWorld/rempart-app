@@ -82,6 +82,21 @@
                 <category android:name="android.intent.category.BROWSABLE"/>
                 <data android:scheme="fr.rempart-messenger.app"/>
             </intent-filter>
+            <!-- Liens de contact (code QR, « Partager mon lien ») : ils visent
+                 la version web, qui ouvre le contact dans un navigateur, et
+                 Android les confie ici quand Rempart est installe. Verifie par
+                 web/.well-known/assetlinks.json (empreinte de la cle de
+                 release) : sans cette verification, Android laisse le
+                 navigateur les ouvrir, et la version web prend le relais. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data
+                    android:scheme="https"
+                    android:host="app.rempart-messenger.fr"
+                    android:pathPrefix="/contact/"/>
+            </intent-filter>
             <!-- Destination de « Partager » dans les autres applications :
                  photos, videos, fichiers, un ou plusieurs, et le texte (liens).
                  Recu par Partage.kt. `singleTask` ci-dessus est indispensable :

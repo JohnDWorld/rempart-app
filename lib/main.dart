@@ -19,6 +19,7 @@ import 'core/utils/erreur_de_lien.dart';
 import 'data/providers/contenu_notifications.dart';
 import 'data/providers/mode_theme.dart';
 import 'data/providers/taille_texte.dart';
+import 'data/services/lien_contact_entrant.dart';
 import 'data/services/notification_service.dart';
 import 'data/services/partage_entrant.dart';
 import 'data/services/presence_isolate.dart';
@@ -89,6 +90,10 @@ Future<void> _demarrer(List<String> args) async {
   // application (Android). Relevé dès maintenant : c'est peut-être lui qui a
   // lancé Rempart.
   PartageEntrant.instance.init();
+
+  // Un lien de contact (code QR, lien partagé) peut aussi avoir lancé
+  // Rempart : relevé de même, l'accueil l'ouvrira.
+  unawaited(LienContactEntrant.instance.init());
 
   // Les services lourds (base Matrix, chiffrement, push) sont amorcés DERRIÈRE
   // l'écran de démarrage. Les attendre ici laissait l'écran noir plus d'une

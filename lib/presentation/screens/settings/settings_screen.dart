@@ -100,6 +100,7 @@ class SettingsScreen extends ConsumerWidget {
               avatarUrl,
               email,
               matrixId,
+              ref.watch(currentProfileProvider).value?.username,
             ),
 
             // Section Compte
@@ -113,6 +114,12 @@ class SettingsScreen extends ConsumerWidget {
                   title: const Text('Modifier le profil'),
                   trailing: const CupertinoListTileChevron(),
                   onTap: () => context.push('/profil/modifier'),
+                ),
+                CupertinoListTile.notched(
+                  leading: const Icon(CupertinoIcons.qrcode),
+                  title: const Text('Mon code QR'),
+                  trailing: const CupertinoListTileChevron(),
+                  onTap: () => context.push('/mon-code'),
                 ),
                 CupertinoListTile.notched(
                   leading: const Icon(CupertinoIcons.lock),
@@ -481,6 +488,7 @@ class SettingsScreen extends ConsumerWidget {
             avatarUrl,
             email,
             matrixId,
+            ref.watch(currentProfileProvider).value?.username,
           ),
 
           const Divider(),
@@ -492,6 +500,12 @@ class SettingsScreen extends ConsumerWidget {
             title: const Text('Modifier le profil'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => context.push('/profil/modifier'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.qr_code),
+            title: const Text('Mon code QR'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.push('/mon-code'),
           ),
           ListTile(
             leading: const Icon(Icons.lock_outline),
@@ -744,6 +758,7 @@ class SettingsScreen extends ConsumerWidget {
     String? avatarUrl,
     String email,
     String matrixId,
+    String? nomUtilisateur,
   ) {
     final primaryColor = Theme.of(context).colorScheme.primary;
 
@@ -765,6 +780,18 @@ class SettingsScreen extends ConsumerWidget {
                 ),
           ),
           const SizedBox(height: 4),
+
+          // Le nom d'utilisateur, par lequel on est trouvé : c'est lui qu'on
+          // donne à quelqu'un, l'adresse en dessous restant pour soi.
+          if (nomUtilisateur != null) ...[
+            Text(
+              '@$nomUtilisateur',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: primaryColor,
+                  ),
+            ),
+            const SizedBox(height: 4),
+          ],
 
           // Email
           Text(

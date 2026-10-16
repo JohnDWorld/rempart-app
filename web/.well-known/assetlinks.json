@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "fr.rempart_messenger.app",
+      "sha256_cert_fingerprints": [
+        "25:08:31:56:88:19:0A:FF:56:0A:8C:D0:FA:D6:87:13:50:43:DC:95:44:8F:2C:0B:FD:66:6A:E6:74:C5:AE:B8"
+      ]
+    }
+  }
+]

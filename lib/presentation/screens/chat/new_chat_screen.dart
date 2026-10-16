@@ -5,9 +5,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/plateforme.dart';
+import '../../../core/utils/nom_utilisateur.dart';
 import '../../../data/models/profile.dart';
 import '../../../data/providers/providers.dart';
+import '../../widgets/common/proposer_contact.dart';
 import '../../widgets/common/user_avatar.dart';
+import '../../widgets/settings/scanner_qr.dart';
 
 /// Écran pour créer une nouvelle conversation
 class NewChatScreen extends ConsumerStatefulWidget {
@@ -78,6 +81,21 @@ class _NewChatScreenState extends ConsumerState<NewChatScreen> {
     }
   }
 
+  /// Scanne le code QR d'une personne (« Mon code QR » dans ses paramètres)
+  /// et propose de lui écrire.
+  Future<void> _scannerCode() async {
+    final texte = await scannerTexteQr(
+      context,
+      titre: 'Scanner un code',
+      consigne: 'Visez le code de la personne : il est dans ses paramètres, '
+          'sous « Mon code QR ».',
+      accepter: (texte) => nomDepuisLienContact(texte) != null,
+    );
+    final nom = texte == null ? null : nomDepuisLienContact(texte);
+    if (nom == null || !mounted) return;
+    await proposerContact(context, nom, remplacer: true);
+  }
+
   @override
   Widget build(BuildContext context) {
     final searchQuery = ref.watch(contactSearchQueryProvider);
@@ -119,6 +137,29 @@ class _NewChatScreenState extends ConsumerState<NewChatScreen> {
                 },
               ),
             ),
+
+            // Pas de caméra à scanner dans un navigateur : la version web
+            // montre son code, le téléphone le lit.
+            if (!estWeb)
+              CupertinoListTile(
+                leading: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: CupertinoTheme.of(context)
+                        .primaryColor
+                        .withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Icon(
+                    CupertinoIcons.qrcode_viewfinder,
+                    color: CupertinoTheme.of(context).primaryColor,
+                  ),
+                ),
+                title: const Text('Scanner un code'),
+                trailing: const CupertinoListTileChevron(),
+                onTap: _scannerCode,
+              ),
 
             // Bouton créer un groupe
             CupertinoListTile(
@@ -246,6 +287,22 @@ class _NewChatScreenState extends ConsumerState<NewChatScreen> {
             ),
           ),
 
+          // Pas de caméra à scanner dans un navigateur : la version web
+          // montre son code, le téléphone le lit.
+          if (!estWeb)
+            ListTile(
+              leading: CircleAvatar(
+                backgroundColor:
+                    Theme.of(context).colorScheme.primaryContainer,
+                child: Icon(
+                  Icons.qr_code_scanner,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+              title: const Text('Scanner un code'),
+              onTap: _scannerCode,
+            ),
+
           // Bouton créer un groupe
           ListTile(
             leading: CircleAvatar(
@@ -369,12 +426,17 @@ class _NewChatScreenState extends ConsumerState<NewChatScreen> {
                 : Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 8),
-          Text(
-            "Entrez un nom ou un nom d'utilisateur",
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: isIOS
-                  ? CupertinoColors.systemGrey
-                  : Theme.of(context).colorScheme.outline,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Text(
+              "Le nom d'un de vos contacts, ou le @nom d'utilisateur de "
+              "quelqu'un d'autre",
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: isIOS
+                    ? CupertinoColors.systemGrey
+                    : Theme.of(context).colorScheme.outline,
+              ),
             ),
           ),
         ],
@@ -411,12 +473,21 @@ class _NewChatScreenState extends ConsumerState<NewChatScreen> {
                 : Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 8),
-          Text(
-            'Aucun utilisateur trouvé',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: isIOS
-                  ? CupertinoColors.systemGrey
-                  : Theme.of(context).colorScheme.outline,
+          // Le nom affiché ne se cherche que parmi ses contacts : sans cette
+          // phrase, « aucun résultat » laisserait croire que la personne
+          // n'est pas sur Rempart.
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: Text(
+              "Pour quelqu'un avec qui vous n'avez encore aucune "
+              "conversation, il faut son @nom d'utilisateur exact, ou son "
+              'code QR.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: isIOS
+                    ? CupertinoColors.systemGrey
+                    : Theme.of(context).colorScheme.outline,
+              ),
             ),
           ),
         ],

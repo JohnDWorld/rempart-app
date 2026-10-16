@@ -8,6 +8,7 @@ import 'package:matrix/matrix.dart' as matrix;
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 
 import '../../core/constants/supabase_constants.dart';
+import '../../core/utils/nom_utilisateur.dart';
 import '../models/bot.dart';
 import '../models/matrix_extensions.dart';
 import '../models/profile.dart';
@@ -138,13 +139,46 @@ final profileProvider =
   return profileService.getProfile(userId);
 });
 
-/// Provider pour la recherche de profils
+/// Recherche de personnes, en deux temps.
+///
+/// Un nom d'utilisateur exact trouve n'importe qui ; un nom affiché ne se
+/// cherche que parmi les personnes avec qui l'on partage une conversation
+/// (l'annuaire de Synapse, voir `MatrixService.contactsCorrespondants`). Avant
+/// le 2026-10-15, tout nom affiché se cherchait dans tout l'annuaire : vingt
+/// « Marie » au hasard sur cinquante, et qui tapait « a » parcourait les
+/// inscrits. Le nom exact vient en tête ; « @marie » ne cherche que lui.
 final profileSearchProvider =
     FutureProvider.family<List<Profile>, String>((ref, query) async {
-  if (query.isEmpty) return [];
+  final terme = query.trim();
+  if (terme.isEmpty) return [];
 
   final profileService = ref.watch(profileServiceProvider);
-  return profileService.searchProfiles(query);
+  final matrixService = ref.watch(matrixServiceProvider);
+  final moi = ref.watch(currentUserIdProvider);
+  final nom = normaliserNomUtilisateur(terme);
+
+  final (exact, contacts) = await (
+    estUnNomCherchable(nom)
+        ? profileService.getProfileByUsername(nom)
+        : Future<Profile?>.value(),
+    terme.startsWith('@')
+        ? Future.value(const <Profile>[])
+        : matrixService
+            .contactsCorrespondants(terme)
+            .then(profileService.profilsParId)
+            // L'annuaire Matrix est un complément : injoignable, le nom exact
+            // reste cherchable.
+            .catchError((Object e) {
+            debugPrint('Recherche : annuaire Matrix indisponible ($e)');
+            return const <Profile>[];
+          }),
+  ).wait;
+
+  return [
+    if (exact != null && exact.id != moi) exact,
+    for (final profil in contacts)
+      if (profil.id != exact?.id && profil.id != moi) profil,
+  ];
 });
 
 /// Provider pour observer le profil en temps réel
