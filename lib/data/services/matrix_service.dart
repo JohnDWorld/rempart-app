@@ -17,6 +17,7 @@ import '../../core/utils/reponse_bouton.dart';
 import '../models/matrix_extensions.dart';
 import 'analyse_video.dart';
 import 'client_rempart.dart';
+import 'contenu_media.dart';
 import 'enregistrement_photos.dart';
 import 'notification_service.dart';
 import 'statut_presence.dart';
@@ -1611,6 +1612,141 @@ class MatrixService {
     );
   }
 
+  /// Envoie plusieurs médias choisis ensemble, d'un bloc.
+  ///
+  /// Chacun était téléversé PUIS annoncé, l'un après l'autre : le contact
+  /// recevait les photos une à une, au rythme des téléversements, et avait
+  /// le temps de commenter la première avant que la dernière n'arrive
+  /// (relevé le 2026-10-20). Tout est désormais téléversé d'abord, en série
+  /// (le serveur refuse quinze envois simultanés), et les messages partent
+  /// ensuite à la suite, une fraction de seconde chacun : le contact les
+  /// reçoit ensemble, déjà réunis en album (`fr.rempart.album`).
+  ///
+  /// La légende n'accompagne que le premier : répétée, elle donnerait quinze
+  /// fois le même texte. [auFil] reçoit le nombre de médias prêts, pour le
+  /// bandeau d'envoi. Un échec arrête la préparation ; ce qui était prêt part
+  /// quand même, puis [EnvoiInterrompu] dit combien et pourquoi.
+  Future<int> envoyerAlbum({
+    required String roomId,
+    required List<MatrixFile> fichiers,
+    String? legende,
+    void Function(int prets)? auFil,
+  }) async {
+    final room = _client!.getRoomById(roomId);
+    if (room == null) return 0;
+    _exigerChiffrement(room);
+
+    final albumId = 'alb_${DateTime.now().microsecondsSinceEpoch}';
+    final texte = legende?.trim() ?? '';
+    final contenus = <Map<String, dynamic>>[];
+    Object? panne;
+    for (final fichier in fichiers) {
+      try {
+        final (media, vignette) = await _preparerMedia(fichier);
+        contenus.add(
+          await _televerser(room, media, vignette, {
+            if (contenus.isEmpty && texte.isNotEmpty) 'body': texte,
+            'fr.rempart.album': {'id': albumId},
+          }),
+        );
+        auFil?.call(contenus.length);
+      } catch (e) {
+        panne = e;
+        break;
+      }
+    }
+
+    // L'un après l'autre, dans l'ordre du choix : la mosaïque suit l'ordre
+    // du fil. Un message qui échoue reste dans la conversation, marqué en
+    // échec et prêt à renvoyer (le SDK rend alors null).
+    var envoyes = 0;
+    final chrono = Stopwatch()..start();
+    for (final contenu in contenus) {
+      try {
+        if (await room.sendEvent(contenu) != null) envoyes++;
+      } catch (e) {
+        panne ??= e;
+      }
+    }
+    // L'écart entre le premier et le dernier message, celui que voit le
+    // contact : il doit rester de l'ordre de la seconde.
+    debugPrint(
+      'MatrixService: album de $envoyes média(s) annoncé en '
+      '${chrono.elapsedMilliseconds} ms',
+    );
+    if (panne != null || envoyes < contenus.length) {
+      throw EnvoiInterrompu(envoyes, panne);
+    }
+    return envoyes;
+  }
+
+  /// Chiffre et téléverse un média et sa vignette, puis rend le message qui
+  /// l'annoncera, sans l'envoyer. Mêmes étapes que `Room.sendFileEvent`,
+  /// vignette d'une photo comprise.
+  Future<Map<String, dynamic>> _televerser(
+    Room room,
+    MatrixFile fichier,
+    MatrixImageFile? vignetteFournie,
+    Map<String, dynamic> extra,
+  ) async {
+    final client = room.client;
+    var vignette = vignetteFournie;
+    if (fichier is MatrixImageFile && vignette == null) {
+      try {
+        vignette = await fichier.generateThumbnail(
+          nativeImplementations: client.nativeImplementations,
+          customImageResizer: client.customImageResizer,
+        );
+        // Plus lourde que la photo, elle ne servirait à rien.
+        if (vignette != null && fichier.size < vignette.size) vignette = null;
+      } catch (e) {
+        debugPrint('MatrixService: vignette impossible ($e)');
+      }
+    }
+
+    final chiffrer = room.encrypted && client.fileEncryptionEnabled;
+    final chiffre = chiffrer ? await fichier.encrypt() : null;
+    final vignetteChiffree =
+        chiffrer && vignette != null ? await vignette.encrypt() : null;
+    final url =
+        await _televerserAvecReprise(client, chiffre?.toMatrixFile() ?? fichier);
+    final urlVignette = vignette == null
+        ? null
+        : await _televerserAvecReprise(
+            client,
+            vignetteChiffree?.toMatrixFile() ?? vignette,
+          );
+    return contenuDuMedia(
+      fichier: fichier,
+      url: url,
+      chiffre: chiffre,
+      vignette: vignette,
+      urlVignette: urlVignette,
+      vignetteChiffree: vignetteChiffree,
+      extra: extra,
+    );
+  }
+
+  /// Comme le SDK : un refus du serveur (trop volumineux) arrête tout, une
+  /// coupure se retente chaque seconde, le temps d'un envoi de message.
+  Future<Uri> _televerserAvecReprise(Client client, MatrixFile f) async {
+    final limite = DateTime.now().add(client.sendTimelineEventTimeout);
+    while (true) {
+      try {
+        return await client.uploadContent(
+          f.bytes,
+          filename: f.name,
+          contentType: f.mimeType,
+        );
+      } on MatrixException {
+        rethrow;
+      } catch (_) {
+        if (DateTime.now().isAfter(limite)) rethrow;
+        await Future<void>.delayed(const Duration(seconds: 1));
+      }
+    }
+  }
+
   /// Le média tel qu'il doit partir, et la vignette d'une vidéo.
   ///
   /// Une vidéo partait nue : ni vignette, ni durée, ni format. Le
@@ -1855,4 +1991,17 @@ class MatrixService {
       return null;
     }
   }
+}
+
+/// Un envoi groupé qui n'est pas allé au bout : [envoyes] médias sont partis,
+/// [cause] dit pourquoi les autres non (null si le serveur a seulement refusé
+/// des messages, restés dans la conversation, marqués en échec).
+class EnvoiInterrompu implements Exception {
+  const EnvoiInterrompu(this.envoyes, this.cause);
+
+  final int envoyes;
+  final Object? cause;
+
+  @override
+  String toString() => '$envoyes envoyé(s), puis : ${cause ?? 'échec'}';
 }

@@ -28,6 +28,7 @@ import '../../../data/providers/providers.dart';
 import '../../../data/services/compression_image.dart';
 import '../../../data/services/enregistreur_vocal.dart';
 import '../../../data/services/lecteur_vocal.dart';
+import '../../../data/services/matrix_service.dart' show EnvoiInterrompu;
 import '../../../data/services/notification_service.dart';
 import '../../../data/services/partage_entrant.dart';
 import '../../../data/services/reinitialisation_e2e.dart';
@@ -114,6 +115,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   /// Envoi de pièce jointe en cours (upload + chiffrement peuvent durer).
   bool _envoiPieceJointe = false;
+
+  /// Où en est un envoi groupé, pour le bandeau ; null pour un seul média.
+  String? _etapeEnvoi;
 
   late final AppLifecycleListener _retour;
 
@@ -708,12 +712,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
   }
 
-  /// Envoie les médias choisis, l'un après l'autre.
+  /// Envoie les médias choisis.
   ///
-  /// En série et non en parallèle : le serveur limite la taille et le nombre
-  /// d'envois simultanés, et quinze photos lancées ensemble se font refuser en
-  /// bloc. L'ordre est aussi celui de la sélection, ce qui compte pour une
-  /// suite de photos.
+  /// Un seul part comme avant (`sendFile`, dont la bulle paraît dès le début
+  /// du téléversement). Plusieurs partent d'un bloc (`envoyerAlbum`) :
+  /// téléversés d'abord, annoncés ensuite, pour que le contact les reçoive
+  /// ensemble et non une à une au rythme des téléversements. Le bandeau dit
+  /// où en est la préparation, la seule attente qui reste.
   ///
   /// La légende n'accompagne que le PREMIER : répétée sur chacun, elle
   /// donnerait quinze fois le même texte dans le fil.
@@ -721,51 +726,79 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     List<matrix.MatrixFile> fichiers,
     _ChoixEnvoi choix,
   ) async {
-    setState(() => _envoiPieceJointe = true);
-    var envoyes = 0;
-    // Une marque commune aux médias d'un même envoi, pour que le fil les
-    // affiche groupés. Inutile pour un seul : une grille d'une case n'est
-    // qu'une image.
-    final albumId = fichiers.length > 1
-        ? 'alb_${DateTime.now().microsecondsSinceEpoch}'
-        : null;
+    final total = fichiers.length;
+    setState(() {
+      _envoiPieceJointe = true;
+      _etapeEnvoi = total > 1 ? "Préparation de l'envoi · 0 sur $total" : null;
+    });
+    final service = ref.read(matrixServiceProvider);
     try {
-      for (final fichier in fichiers) {
-        final aEnvoyer = choix.hauteQualite ? fichier : await _allege(fichier);
-        await ref.read(matrixServiceProvider).sendFile(
-              roomId: widget.conversationId,
-              file: aEnvoyer,
-              caption: envoyes == 0 ? choix.legende : '',
-              albumId: albumId,
-            );
-        envoyes++;
-        // La liste des conversations lit le client Matrix hors graphe Riverpod.
-        ref.read(matrixStateNotifierProvider.notifier).state++;
+      final aEnvoyer = [
+        for (final fichier in fichiers)
+          choix.hauteQualite ? fichier : await _allege(fichier),
+      ];
+      if (total == 1) {
+        await service.sendFile(
+          roomId: widget.conversationId,
+          file: aEnvoyer.single,
+          caption: choix.legende,
+        );
+      } else {
+        await service.envoyerAlbum(
+          roomId: widget.conversationId,
+          fichiers: aEnvoyer,
+          legende: choix.legende,
+          auFil: (prets) {
+            if (!mounted) return;
+            setState(() {
+              _etapeEnvoi = prets < total
+                  ? "Préparation de l'envoi · $prets sur $total"
+                  : 'Envoi des $total pièces jointes...';
+            });
+          },
+        );
       }
-    } on matrix.FileTooBigMatrixException catch (e) {
+    } on EnvoiInterrompu catch (e) {
+      _signalerEchecEnvoi(e.envoyes, e.cause);
+    } catch (e) {
+      _signalerEchecEnvoi(0, e);
+    } finally {
+      // Quittée pendant l'envoi, la conversation n'a plus de `ref` : le SDK
+      // finit l'envoi sans elle.
+      if (mounted) {
+        // La liste des conversations lit le client Matrix hors graphe
+        // Riverpod.
+        ref.read(matrixStateNotifierProvider.notifier).state++;
+        setState(() {
+          _envoiPieceJointe = false;
+          _etapeEnvoi = null;
+        });
+      }
+    }
+  }
+
+  /// On dit combien sont partis : sur un lot, « échec » seul laisserait
+  /// croire que rien n'est parti.
+  void _signalerEchecEnvoi(int envoyes, Object? cause) {
+    if (cause is matrix.FileTooBigMatrixException) {
       // Le message du SDK est en anglais et parle d'octets : on dit la même
       // chose dans la langue de l'application.
-      final max = CompressionImage.poidsLisible(e.maxFileSize);
-      final taille = CompressionImage.poidsLisible(e.actualFileSize);
+      final max = CompressionImage.poidsLisible(cause.maxFileSize);
+      final taille = CompressionImage.poidsLisible(cause.actualFileSize);
       _signaler(
         envoyes == 0
             ? 'Trop volumineux : $taille, le serveur accepte $max au plus.'
             : '$envoyes envoyé(s). Le suivant fait $taille, '
                 'le serveur accepte $max au plus.',
       );
-    } catch (e) {
-      // On dit combien sont passés : sur un lot, « échec » seul laisserait
-      // croire que rien n'est parti.
-      _signaler(
-        envoyes == 0
-            ? 'Envoi impossible : $e'
-            : '$envoyes envoyé(s), puis erreur : $e',
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _envoiPieceJointe = false);
-      }
+      return;
     }
+    final raison = cause ?? 'message refusé, à renvoyer depuis la conversation';
+    _signaler(
+      envoyes == 0
+          ? 'Envoi impossible : $raison'
+          : '$envoyes envoyé(s), puis erreur : $raison',
+    );
   }
 
   /// Version allégée d'une photo, ou le fichier tel quel si ça n'a pas de sens.
@@ -2069,7 +2102,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ),
           const SizedBox(width: 12),
           Text(
-            'Envoi de la pièce jointe...',
+            _etapeEnvoi ?? 'Envoi de la pièce jointe...',
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
