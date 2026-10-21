@@ -12,6 +12,7 @@ import '../../core/plateforme.dart';
 import '../../data/providers/providers.dart';
 import '../../data/services/lien_contact_entrant.dart';
 import '../../data/services/partage_entrant.dart';
+import '../../data/services/presentation.dart';
 import '../../data/services/update_service.dart';
 import '../widgets/common/invitation_nom_utilisateur.dart';
 import '../widgets/common/proposer_contact.dart';
@@ -55,13 +56,7 @@ class _AccueilScreenState extends State<AccueilScreen>
     // mega-octets chacun. Le lancement est le seul moment ou on le sait avec
     // certitude : l'application tourne, donc sa version a bien ete installee.
     unawaited(UpdateService.instance.purgerAnciens());
-    // L'invitation à choisir son nom attend la fenêtre de mise à jour : deux
-    // dialogues empilés, et le second passerait inaperçu.
-    unawaited(
-      _verifierMiseAJour().whenComplete(() {
-        if (mounted) unawaited(inviterAChoisirSonNom(context));
-      }),
-    );
+    unawaited(_apresMiseAJour());
     // Un partage venu d'une autre application attend l'accueil : c'est le
     // seul écran qui garantit une session ouverte, et le partage a pu lancer
     // l'application lui-même, avant toute connexion.
@@ -87,6 +82,20 @@ class _AccueilScreenState extends State<AccueilScreen>
   void _ouvrirPartage() {
     if (!mounted || PartageEntrant.instance.enAttente.value == null) return;
     unawaited(GoRouter.of(context).push('/partager'));
+  }
+
+  /// Ce qui s'ouvre de soi-même à l'arrivée, l'un après l'autre : deux
+  /// interruptions empilées, et la seconde passerait inaperçue. La fenêtre de
+  /// mise à jour d'abord, puis la présentation (une fois par compte), sinon
+  /// l'invitation à choisir son nom, qui attend alors l'ouverture suivante.
+  Future<void> _apresMiseAJour() async {
+    await _verifierMiseAJour();
+    if (!mounted) return;
+    if (!await Presentation.dejaVue()) {
+      if (mounted) unawaited(GoRouter.of(context).push('/presentation'));
+      return;
+    }
+    if (mounted) unawaited(inviterAChoisirSonNom(context));
   }
 
   void _ouvrirContact() {

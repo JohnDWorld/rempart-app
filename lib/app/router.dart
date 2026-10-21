@@ -24,6 +24,7 @@ import '../presentation/screens/conversations/partager_screen.dart';
 import '../presentation/screens/legal/conditions_utilisation_screen.dart';
 import '../presentation/screens/legal/licences_screen.dart';
 import '../presentation/screens/legal/politique_confidentialite_screen.dart';
+import '../presentation/screens/presentation_screen.dart';
 import '../presentation/screens/profile/add_members_screen.dart';
 import '../presentation/screens/profile/group_info_screen.dart';
 import '../presentation/screens/profile/modifier_profil_screen.dart';
@@ -224,7 +225,16 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/bots',
         name: 'bots',
-        builder: (context, state) => const BotsHubScreen(),
+        builder: (context, state) => BotsHubScreen(
+          decouverte: state.uri.queryParameters['decouverte'] == '1',
+        ),
+      ),
+
+      // Présentation de Rempart, à la première ouverture d'un compte
+      GoRoute(
+        path: '/presentation',
+        name: 'presentation',
+        builder: (context, state) => const PresentationScreen(),
       ),
 
       // Catalogue des bots systeme

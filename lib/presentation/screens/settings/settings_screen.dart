@@ -298,6 +298,12 @@ class SettingsScreen extends ConsumerWidget {
                   trailing: const CupertinoListTileChevron(),
                   onTap: () => context.push('/legal/licences'),
                 ),
+                CupertinoListTile.notched(
+                  leading: const Icon(CupertinoIcons.sparkles),
+                  title: const Text('Revoir la présentation'),
+                  trailing: const CupertinoListTileChevron(),
+                  onTap: () => context.push('/presentation'),
+                ),
               ],
             ),
 
@@ -642,6 +648,12 @@ class SettingsScreen extends ConsumerWidget {
             subtitle: const Text('Logiciel libre, sous licence AGPL'),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => context.push('/legal/licences'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.auto_awesome_outlined),
+            title: const Text('Revoir la présentation'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.push('/presentation'),
           ),
 
           const Divider(),
