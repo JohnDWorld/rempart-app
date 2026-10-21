@@ -8,9 +8,11 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/plateforme.dart';
 import '../../../core/utils/nom_utilisateur.dart';
 import '../../../core/utils/regles_mot_de_passe.dart';
+import '../../../core/utils/verification_nom_utilisateur.dart';
 import '../../../data/providers/providers.dart';
 import '../../../services/auth_service.dart';
 import '../../widgets/adaptive/adaptive.dart';
+import '../../widgets/common/indicateur_nom_utilisateur.dart';
 import '../../widgets/common/loading_button.dart';
 
 /// Écran d'inscription
@@ -43,8 +45,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   /// prochaine frappe.
   String? _erreurUsername;
 
+  /// Règles et disponibilité pendant la frappe, sans attendre l'envoi.
+  late final _verifNom = VerificationNomUtilisateur(
+    (nom) => ref.read(profileServiceProvider).nomUtilisateurRefuse(nom),
+  );
+
   @override
   void dispose() {
+    _verifNom.dispose();
     _displayNameController.dispose();
     _usernameController.dispose();
     _emailController.dispose();
@@ -368,6 +376,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         if (_usernameSaisi) return;
                         _usernameController.text =
                             suggestionNomUtilisateur(value);
+                        _verifNom.saisie(_usernameController.text);
                       },
                       validator: (value) {
                         if (value == null || value.isEmpty) {
@@ -384,26 +393,33 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     // Nom d'utilisateur : ce qui distingue deux homonymes.
                     // Proposé d'après le nom d'affichage tant qu'on n'y
                     // touche pas.
-                    TextFormField(
-                      controller: _usernameController,
-                      textInputAction: TextInputAction.next,
-                      autocorrect: false,
-                      enableSuggestions: false,
-                      decoration: const InputDecoration(
-                        labelText: "Nom d'utilisateur",
-                        hintText: 'marie.dupont',
-                        helperText: "Unique : c'est par lui qu'on vous trouve",
-                        prefixIcon: Icon(Icons.alternate_email),
-                      ),
-                      forceErrorText: _erreurUsername,
-                      onChanged: (_) {
-                        _usernameSaisi = true;
-                        if (_erreurUsername != null) {
-                          setState(() => _erreurUsername = null);
-                        }
-                      },
-                      validator: (value) => problemeNomUtilisateur(
-                        normaliserNomUtilisateur(value ?? ''),
+                    ListenableBuilder(
+                      listenable: _verifNom,
+                      builder: (context, _) => TextFormField(
+                        controller: _usernameController,
+                        textInputAction: TextInputAction.next,
+                        autocorrect: false,
+                        enableSuggestions: false,
+                        decoration: InputDecoration(
+                          labelText: "Nom d'utilisateur",
+                          hintText: 'marie.dupont',
+                          helperText: _verifNom.annonce ??
+                              "Unique : c'est par lui qu'on vous trouve",
+                          prefixIcon: const Icon(Icons.alternate_email),
+                          suffixIcon:
+                              indicateurNomUtilisateur(context, _verifNom.etat),
+                        ),
+                        forceErrorText: _erreurUsername ?? _verifNom.erreur,
+                        onChanged: (value) {
+                          _usernameSaisi = true;
+                          if (_erreurUsername != null) {
+                            setState(() => _erreurUsername = null);
+                          }
+                          _verifNom.saisie(value);
+                        },
+                        validator: (value) => problemeNomUtilisateur(
+                          normaliserNomUtilisateur(value ?? ''),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 16),

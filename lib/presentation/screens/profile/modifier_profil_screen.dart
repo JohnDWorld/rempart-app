@@ -6,9 +6,11 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../../app/theme.dart';
 import '../../../core/utils/nom_utilisateur.dart';
+import '../../../core/utils/verification_nom_utilisateur.dart';
 import '../../../data/providers/providers.dart';
 import '../../../data/services/profile_service.dart';
 import '../../widgets/adaptive/adaptive.dart';
+import '../../widgets/common/indicateur_nom_utilisateur.dart';
 import '../../widgets/common/user_avatar.dart';
 
 /// Édition de son propre profil : photo, nom affiché, nom d'utilisateur, bio.
@@ -39,8 +41,14 @@ class _ModifierProfilScreenState extends ConsumerState<ModifierProfilScreen> {
   bool _enregistrement = false;
   bool _photoEnCours = false;
 
+  /// Règles et disponibilité pendant la frappe, sans attendre l'envoi.
+  late final _verifNom = VerificationNomUtilisateur(
+    (nom) => ref.read(profileServiceProvider).nomUtilisateurRefuse(nom),
+  );
+
   @override
   void dispose() {
+    _verifNom.dispose();
     _nomController.dispose();
     _nomUtilisateurController.dispose();
     _bioController.dispose();
@@ -113,19 +121,28 @@ class _ModifierProfilScreenState extends ConsumerState<ModifierProfilScreen> {
             textInputAction: TextInputAction.next,
           ),
           const SizedBox(height: RempartTokens.espaceL),
-          AdaptiveTextField(
-            controller: _nomUtilisateurController,
-            label: "Nom d'utilisateur",
-            placeholder: 'marie.dupont',
-            prefix: const Icon(Icons.alternate_email),
-            autocorrect: false,
-            textInputAction: TextInputAction.next,
-            errorText: _erreurNomUtilisateur,
-            onChanged: (_) {
-              if (_erreurNomUtilisateur != null) {
-                setState(() => _erreurNomUtilisateur = null);
-              }
-            },
+          ListenableBuilder(
+            listenable: _verifNom,
+            builder: (context, _) => AdaptiveTextField(
+              controller: _nomUtilisateurController,
+              label: "Nom d'utilisateur",
+              placeholder: 'marie.dupont',
+              prefix: const Icon(Icons.alternate_email),
+              suffix: indicateurNomUtilisateur(context, _verifNom.etat),
+              autocorrect: false,
+              textInputAction: TextInputAction.next,
+              helperText: _verifNom.annonce,
+              errorText: _erreurNomUtilisateur ?? _verifNom.erreur,
+              onChanged: (value) {
+                if (_erreurNomUtilisateur != null) {
+                  setState(() => _erreurNomUtilisateur = null);
+                }
+                _verifNom.saisie(
+                  value,
+                  actuel: ref.read(currentProfileProvider).value?.username,
+                );
+              },
+            ),
           ),
           const SizedBox(height: RempartTokens.espaceL),
           AdaptiveTextField(
