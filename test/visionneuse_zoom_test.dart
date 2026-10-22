@@ -1,6 +1,8 @@
 import 'dart:convert';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:matrix/matrix.dart';
 import 'package:rempart_app/data/services/cache_medias.dart';
@@ -12,8 +14,7 @@ class _BaseFactice implements DatabaseApi {
   Future<User?> getUser(String userId, Room room) async => null;
 
   @override
-  Future<CachedProfileInformation?> getUserProfile(String userId) async =>
-      null;
+  Future<CachedProfileInformation?> getUserProfile(String userId) async => null;
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -125,5 +126,62 @@ void main() {
     await tester.fling(image, const Offset(-400, 0), 1500);
     await tester.pumpAndSettle();
     expect(find.text('3 sur 3'), findsOneWidget);
+  });
+
+  // Une souris ne fait pas glisser une page : sur ordinateur, dans la version
+  // web, rien ne permettait de passer à la photo suivante (relevé le
+  // 2026-10-22).
+  Future<void> ouvrirAuDebut(WidgetTester tester) => tester.pumpWidget(
+        MaterialApp(
+          home: VisionneuseImage(
+            images: photos,
+            onEnregistrer: (_) {},
+            onPartager: (_) {},
+          ),
+        ),
+      );
+  final suivante = find.byTooltip('Photo suivante');
+  final precedente = find.byTooltip('Photo précédente');
+
+  testWidgets('au doigt, pas de flèches : on glisse', (tester) async {
+    await ouvrirAuDebut(tester);
+    expect(suivante, findsNothing);
+    expect(precedente, findsNothing);
+  });
+
+  testWidgets("avec une souris, des flèches mènent d'une photo à l'autre",
+      (tester) async {
+    await ouvrirAuDebut(tester);
+    final souris = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await souris.addPointer(location: Offset.zero);
+    addTearDown(souris.removePointer);
+    await tester.pump();
+
+    // Rien avant la première, rien après la dernière.
+    expect(precedente, findsNothing);
+    await tester.tap(suivante);
+    await tester.pumpAndSettle();
+    expect(find.text('2 sur 3'), findsOneWidget);
+    expect(precedente, findsOneWidget);
+
+    await tester.tap(suivante);
+    await tester.pumpAndSettle();
+    expect(find.text('3 sur 3'), findsOneWidget);
+    expect(suivante, findsNothing);
+
+    await tester.tap(precedente);
+    await tester.pumpAndSettle();
+    expect(find.text('2 sur 3'), findsOneWidget);
+  });
+
+  testWidgets('les flèches du clavier changent de photo', (tester) async {
+    await ouvrirAuDebut(tester);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pumpAndSettle();
+    expect(find.text('2 sur 3'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    await tester.pumpAndSettle();
+    expect(find.text('1 sur 3'), findsOneWidget);
   });
 }

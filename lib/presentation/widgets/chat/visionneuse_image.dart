@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:matrix/matrix.dart' as matrix;
 
 import '../../../core/mouvement.dart';
@@ -64,11 +66,53 @@ class _VisionneuseImageState extends State<VisionneuseImage> {
     if (_pagesFigees != figees) setState(() {});
   }
 
+  /// Une souris ne fait pas glisser une page : Flutter réserve ce geste au
+  /// doigt et au pavé tactile. Sur ordinateur, dans la version web, rien ne
+  /// permettait donc de passer à la photo suivante (relevé le 2026-10-22).
+  /// Des flèches s'affichent dès qu'une souris est branchée, et les touches
+  /// ← → marchent partout.
+  final _souris = RendererBinding.instance.mouseTracker;
+
+  void _sourisChange() => setState(() {});
+
+  @override
+  void initState() {
+    super.initState();
+    _souris.addListener(_sourisChange);
+  }
+
   @override
   void dispose() {
+    _souris.removeListener(_sourisChange);
     _pages.dispose();
     super.dispose();
   }
+
+  void _aller(int ecart) {
+    final cible = _courante + ecart;
+    if (cible < 0 || cible >= widget.images.length) return;
+    final duree = dureeAnimation(context, const Duration(milliseconds: 250));
+    // Sans mouvement demandé, la durée est nulle, ce qu'une animation refuse.
+    if (duree == Duration.zero) return _pages.jumpToPage(cible);
+    _pages.animateToPage(cible, duration: duree, curve: Curves.easeOutCubic);
+  }
+
+  Widget _fleche({required bool suivante}) => Align(
+        alignment: suivante ? Alignment.centerRight : Alignment.centerLeft,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: IconButton.filled(
+            tooltip: suivante ? 'Photo suivante' : 'Photo précédente',
+            iconSize: 32,
+            style: IconButton.styleFrom(
+              backgroundColor: Colors.black54,
+              foregroundColor: Colors.white,
+            ),
+            icon: Icon(suivante ? Icons.chevron_right : Icons.chevron_left),
+            onPressed: () => _aller(suivante ? 1 : -1),
+          ),
+        ),
+      );
 
   matrix.Event get _image => widget.images[_courante];
 
@@ -76,7 +120,26 @@ class _VisionneuseImageState extends State<VisionneuseImage> {
   Widget build(BuildContext context) {
     final legende = _image.legendePieceJointe;
     final total = widget.images.length;
+    final fleches = _souris.mouseIsConnected;
 
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.arrowLeft): () => _aller(-1),
+        const SingleActivator(LogicalKeyboardKey.arrowRight): () => _aller(1),
+      },
+      child: Focus(
+        autofocus: true,
+        child: _page(context, legende, total, fleches),
+      ),
+    );
+  }
+
+  Widget _page(
+    BuildContext context,
+    String? legende,
+    int total,
+    bool fleches,
+  ) {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
@@ -134,27 +197,34 @@ class _VisionneuseImageState extends State<VisionneuseImage> {
       body: Column(
         children: [
           Expanded(
-            child: Listener(
-              onPointerDown: (_) => _compterDoigts(1),
-              onPointerUp: (_) => _compterDoigts(-1),
-              onPointerCancel: (_) => _compterDoigts(-1),
-              child: PageView.builder(
-                controller: _pages,
-                physics:
-                    _pagesFigees ? const NeverScrollableScrollPhysics() : null,
-                itemCount: total,
-                onPageChanged: (index) => setState(() {
-                  _courante = index;
-                  _zoomee = false;
-                }),
-                itemBuilder: (context, index) => _PageImage(
-                  key: ValueKey(cleMedia(widget.images[index])),
-                  image: widget.images[index],
-                  onZoom: (zoomee) {
-                    if (zoomee != _zoomee) setState(() => _zoomee = zoomee);
-                  },
+            child: Stack(
+              children: [
+                Listener(
+                  onPointerDown: (_) => _compterDoigts(1),
+                  onPointerUp: (_) => _compterDoigts(-1),
+                  onPointerCancel: (_) => _compterDoigts(-1),
+                  child: PageView.builder(
+                    controller: _pages,
+                    physics: _pagesFigees
+                        ? const NeverScrollableScrollPhysics()
+                        : null,
+                    itemCount: total,
+                    onPageChanged: (index) => setState(() {
+                      _courante = index;
+                      _zoomee = false;
+                    }),
+                    itemBuilder: (context, index) => _PageImage(
+                      key: ValueKey(cleMedia(widget.images[index])),
+                      image: widget.images[index],
+                      onZoom: (zoomee) {
+                        if (zoomee != _zoomee) setState(() => _zoomee = zoomee);
+                      },
+                    ),
+                  ),
                 ),
-              ),
+                if (fleches && _courante > 0) _fleche(suivante: false),
+                if (fleches && _courante < total - 1) _fleche(suivante: true),
+              ],
             ),
           ),
           if (legende != null)
