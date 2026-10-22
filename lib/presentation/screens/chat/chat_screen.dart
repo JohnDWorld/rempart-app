@@ -34,6 +34,7 @@ import '../../../data/services/partage_entrant.dart';
 import '../../../data/services/reinitialisation_e2e.dart';
 import '../../../data/services/statut_presence.dart';
 import '../../widgets/adaptive/adaptive.dart';
+import '../../widgets/chat/apercu_fichier.dart';
 import '../../widgets/chat/glisser_pour_repondre.dart';
 import '../../widgets/chat/informations_message.dart';
 import '../../widgets/chat/lecteur_video.dart';
@@ -847,22 +848,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   /// Enregistre la pièce jointe : dans la galerie pour une image ou une vidéo,
-  /// via la feuille de partage sinon.
-  ///
-  /// La galerie n'accepte que les médias ; pour un PDF, seule la feuille
-  /// système permet de choisir où le ranger.
+  /// où l'on veut pour tout autre fichier (voir [_enregistrerSous]).
   Future<void> _enregistrerPieceJointe(matrix.Event event) async {
     if (estWeb) {
       await _telechargerDansLeNavigateur(event);
       return;
     }
-    final fichier = await _fichierTemporaire(event);
-    if (fichier == null || !mounted) return;
-
     if (!event.isImageMessage && !event.isVideoMessage) {
-      await _partagerFichier(fichier, event);
+      await _enregistrerSous(event);
       return;
     }
+    final fichier = await _fichierTemporaire(event);
+    if (fichier == null || !mounted) return;
 
     try {
       if (event.isVideoMessage) {
@@ -876,6 +873,25 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       // porte de sortie plutôt qu'un échec sec.
       _signaler('Galerie indisponible (${e.type.name}), partage proposé.');
       if (mounted) await _partagerFichier(fichier, event);
+    }
+  }
+
+  /// Un fichier (PDF, document...) s'enregistre par la fenêtre « Enregistrer
+  /// sous » du système, qui laisse choisir le dossier. La galerie n'accepte que
+  /// les médias, et la feuille de partage, utilisée jusqu'au 2026-10-22, ne
+  /// proposait pas d'enregistrer sur le téléphone : une facture reçue d'un
+  /// agent ne pouvait aller que dans une autre application.
+  Future<void> _enregistrerSous(matrix.Event event) async {
+    try {
+      final fichier = await event.downloadAndDecryptAttachment();
+      final chemin = await FilePicker.platform.saveFile(
+        dialogTitle: 'Enregistrer',
+        fileName: _nomSur(event),
+        bytes: fichier.bytes,
+      );
+      if (chemin != null) _signaler('Fichier enregistré.');
+    } catch (e) {
+      _signaler('Enregistrement impossible : $e');
     }
   }
 
@@ -956,6 +972,19 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           depart: math.max(0, images.indexOf(event)),
           onEnregistrer: _enregistrerPieceJointe,
           onEnregistrerTout: _enregistrerLot,
+          onPartager: _partagerPieceJointe,
+        ),
+      ),
+    );
+  }
+
+  /// Un fichier s'ouvre en aperçu d'un appui, comme une photo.
+  Future<void> _ouvrirFichier(matrix.Event fichier) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => ApercuFichier(
+          event: fichier,
+          onEnregistrer: _enregistrerPieceJointe,
           onPartager: _partagerPieceJointe,
         ),
       ),
@@ -1794,7 +1823,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                                       highlighted:
                                           event.eventId == _highlightedEventId,
                                       // En recherche, toucher un résultat le replace dans
-                                      // le fil ; sinon une image s'ouvre en grand.
+                                      // le fil ; sinon une image s'ouvre en grand, et un
+                                      // fichier en aperçu.
                                       onTap: _isSearching
                                           ? () => _sauterAuMessage(event)
                                           : (event.isImageMessage
@@ -1806,7 +1836,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                                                   )
                                               : event.isVideoMessage
                                                   ? () => _ouvrirVideo(event)
-                                                  : null),
+                                                  : event.isFileMessage
+                                                      ? () =>
+                                                          _ouvrirFichier(event)
+                                                      : null),
                                       onLongPress: () =>
                                           _showMessageOptions(event),
                                       // La citation etait deja tactile, mais le rappel

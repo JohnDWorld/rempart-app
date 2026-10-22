@@ -8,3 +8,7 @@ Future<void> telechargerDansLeNavigateur(
   required String mime,
 }) async =>
     throw UnsupportedError('téléchargement réservé au navigateur');
+
+/// Hors navigateur, un PDF s'affiche dans l'aperçu de Rempart.
+void ouvrirDansUnOnglet(Uint8List octets, {required String mime}) =>
+    throw UnsupportedError('onglet réservé au navigateur');

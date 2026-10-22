@@ -232,10 +232,12 @@ class MessageBubble extends ConsumerWidget {
                           // lui, un bloc de code d'agent arriverait aplati.
                           // Sans légende, le corps d'un média est son nom de
                           // fichier : rien à afficher pour une photo, une
-                          // vidéo ou un vocal.
+                          // vidéo, un vocal ou un fichier, dont la vignette
+                          // porte déjà le nom (il s'affichait deux fois).
                           if (legende == null &&
                               !affiche.isAudioMessage &&
                               !affiche.isVideoMessage &&
+                              !affiche.isFileMessage &&
                               (affiche.isTextMessage ||
                                   (affiche.plaintextBody.isNotEmpty &&
                                       !affiche.isImageMessage)))

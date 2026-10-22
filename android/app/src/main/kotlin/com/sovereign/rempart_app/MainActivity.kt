@@ -135,6 +135,37 @@ class MainActivity : FlutterActivity() {
                 }.start()
             }
         }
+        // Apercu d'un PDF recu (ApercuPdf) : hors du fil principal, une page
+        // prend une centaine de millisecondes a rendre.
+        MethodChannel(engine.dartExecutor.binaryMessenger, "rempart/pdf").setMethodCallHandler {
+            appel, reponse ->
+            val chemin = appel.argument<String>("chemin")
+            if (appel.method !in setOf("pages", "page") || chemin == null) {
+                reponse.notImplemented()
+                return@setMethodCallHandler
+            }
+            Thread {
+                val resultat = runCatching {
+                    if (appel.method == "pages") {
+                        ApercuPdf.nombreDePages(chemin)
+                    } else {
+                        ApercuPdf.page(
+                            chemin,
+                            appel.argument<Int>("index") ?: 0,
+                            appel.argument<Int>("largeur") ?: 1080,
+                        )
+                    }
+                }
+                runOnUiThread {
+                    resultat.fold(
+                        { reponse.success(it) },
+                        // PDF protege par mot de passe ou abime : PdfRenderer
+                        // leve, et l'apercu se replie sur la fiche du fichier.
+                        { reponse.error("pdf", it.message, null) },
+                    )
+                }
+            }.start()
+        }
         MethodChannel(engine.dartExecutor.binaryMessenger, canal).setMethodCallHandler {
             appel, reponse ->
             when (appel.method) {

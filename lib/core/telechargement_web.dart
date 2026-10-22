@@ -28,3 +28,17 @@ Future<void> telechargerDansLeNavigateur(
   await Future<void>.delayed(const Duration(seconds: 2));
   web.URL.revokeObjectURL(url);
 }
+
+/// Ouvre des octets dans un nouvel onglet, où le navigateur affiche lui-même
+/// un PDF.
+///
+/// À appeler pendant l'appui, sans rien attendre avant : passé ce geste, le
+/// navigateur prend l'onglet pour une fenêtre surgissante et le bloque.
+void ouvrirDansUnOnglet(Uint8List octets, {required String mime}) {
+  final blob = web.Blob([octets.toJS].toJS, web.BlobPropertyBag(type: mime));
+  final url = web.URL.createObjectURL(blob);
+  web.window.open(url, '_blank');
+  // L'onglet lit le Blob à son chargement : le rendre aussitôt l'en priverait.
+  Future<void>.delayed(const Duration(minutes: 1))
+      .then((_) => web.URL.revokeObjectURL(url));
+}
