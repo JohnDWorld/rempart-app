@@ -152,4 +152,68 @@ void main() {
       await afficher(tester, 'Un.<br/>Deux.');
       expect(triple, tester.getSize(find.byType(MessageRiche)).height);
     });
+
+  // Le HTML d'un agent Hermes (python `markdown`, extension `nl2br`) pour une
+  // liste aérée, relevé le 2026-10-22 : des retours à la ligne et une
+  // indentation entre les balises, qu'un navigateur ignore.
+  const listeHermes = '<p>Les marqueurs observés</p>\n<ul>\n<li>\n'
+      '<p><strong>Une accroche concrète.</strong><br />\n'
+      "  « J'ai failli exploser une pomme. »</p>\n</li>\n<li>\n"
+      '<p><strong>Un rythme découpé.</strong><br />\n'
+      '  « Un outil installé en local. »</p>\n</li>\n</ul>';
+
+  String texteContenant(WidgetTester tester, String extrait) => tester
+      .widgetList<RichText>(find.byType(RichText))
+      .map((r) => r.text.toPlainText())
+      .firstWhere((t) => t.contains(extrait));
+
+  testWidgets('la puce et le texte de son élément restent sur la même ligne',
+      (tester) async {
+    await afficher(tester, listeHermes);
+
+    expect(texteContenant(tester, 'Une accroche'), startsWith('Une accroche'));
+    final puce = tester.getTopLeft(find.text('• ').first).dy;
+    final texte = tester
+        .getTopLeft(find.byWidgetPredicate((w) =>
+            w is RichText && w.text.toPlainText().startsWith('Une accroche')))
+        .dy;
+    expect(puce, texte);
+  });
+
+  testWidgets("après un <br />, ni ligne vide ni décalage dû à l'indentation",
+      (tester) async {
+    await afficher(tester, listeHermes);
+
+    expect(
+      texteContenant(tester, 'Une accroche'),
+      "Une accroche concrète.\n« J'ai failli exploser une pomme. »",
+    );
+  });
+
+  testWidgets("une citation ne s'ouvre ni ne se ferme sur une ligne vide",
+      (tester) async {
+    await afficher(tester, '<blockquote>\n<p>Le cité.</p>\n</blockquote>');
+
+    expect(texteContenant(tester, 'Le cité'), 'Le cité.');
+  });
+
+  testWidgets('un saut entre deux balises en ligne reste (HTML façon Telegram)',
+      (tester) async {
+    await afficher(tester, '<b>Commande prête</b>\n<i>Retrait à 18 h</i>');
+
+    expect(
+      texteContenant(tester, 'Commande'),
+      'Commande prête\nRetrait à 18 h',
+    );
+  });
+
+  testWidgets('une liste dans une liste garde ses puces', (tester) async {
+    await afficher(
+      tester,
+      '<ul>\n<li>Parent\n<ul>\n<li>Enfant</li>\n</ul>\n</li>\n</ul>',
+    );
+
+    expect(find.text('• '), findsNWidgets(2));
+    expect(texteContenant(tester, 'Enfant'), 'Enfant');
+  });
 }

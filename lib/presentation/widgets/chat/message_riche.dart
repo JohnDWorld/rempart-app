@@ -154,8 +154,54 @@ class _MessageRicheState extends State<MessageRiche> {
       reply.remove();
     }
     final conteneur = dom.Element.tag('div')..nodes.addAll(document.nodes);
+    _retirerBlancsDeMiseEnPage(conteneur);
     return conteneur;
   }
+
+  /// Retire les blancs qui ne servent qu'à mettre en page le HTML source,
+  /// comme le ferait un navigateur : à l'ouverture et à la fermeture d'un
+  /// bloc, et après un `<br>`.
+  ///
+  /// Le HTML d'un agent Hermes (python `markdown`) écrit
+  /// `<li>\n<p><strong>Titre</strong><br />\n  « citation »</p>`. Rendus
+  /// tels quels, ces blancs mettaient la puce seule sur sa ligne, puis une
+  /// ligne vide et un décalage avant la citation (relevé le 2026-10-22).
+  /// Un saut entre deux mots ou deux balises en ligne reste : les agents
+  /// écrits pour Telegram, dont le HTML compte les retours à la ligne, n'ont
+  /// pas d'autre façon d'aller à la ligne.
+  static void _retirerBlancsDeMiseEnPage(dom.Element parent) {
+    if (parent.localName == 'pre') return;
+    bool bloc(dom.Node noeud) =>
+        noeud is dom.Element && _estBlocOuElement(noeud.localName);
+    bool coupe(dom.Node noeud) =>
+        bloc(noeud) || (noeud is dom.Element && noeud.localName == 'br');
+    final noeuds = parent.nodes.toList();
+    for (var i = 0; i < noeuds.length; i++) {
+      final noeud = noeuds[i];
+      if (noeud is dom.Element) {
+        _retirerBlancsDeMiseEnPage(noeud);
+        continue;
+      }
+      if (noeud is! dom.Text) continue;
+      final ouvreUnBloc = _estBlocOuElement(parent.localName);
+      var texte = noeud.data;
+      if (i == 0 ? ouvreUnBloc : coupe(noeuds[i - 1])) {
+        texte = texte.trimLeft();
+      }
+      if (i == noeuds.length - 1 ? ouvreUnBloc : bloc(noeuds[i + 1])) {
+        texte = texte.trimRight();
+      }
+      if (texte.isEmpty) {
+        noeud.remove();
+      } else {
+        noeud.data = texte;
+      }
+    }
+  }
+
+  /// Un bloc, ou un élément de liste.
+  static bool _estBlocOuElement(String? balise) =>
+      balise == 'li' || _estBloc(balise);
 
   List<Widget> _construireBlocs(BuildContext context, dom.Element racine) {
     final blocs = <Widget>[];
@@ -261,10 +307,7 @@ class _MessageRicheState extends State<MessageRiche> {
           child: _Citation(
             couleurTexte: couleurTexte,
             surFondPropre: surFondPropre,
-            child: Text.rich(
-              TextSpan(children: _enfants(context, element, const TextStyle())),
-              style: TextStyle(color: couleurTexte),
-            ),
+            child: _contenuEnBlocs(context, element),
           ),
         );
 
@@ -339,20 +382,23 @@ class _MessageRicheState extends State<MessageRiche> {
                   ordonnee ? '${i + 1}. ' : '• ',
                   style: TextStyle(color: couleurTexte),
                 ),
-                Flexible(
-                  child: Text.rich(
-                    TextSpan(
-                      children: _enfants(context, items[i], const TextStyle()),
-                    ),
-                    style: TextStyle(color: couleurTexte),
-                  ),
-                ),
+                Flexible(child: _contenuEnBlocs(context, items[i])),
               ],
             ),
           ),
       ],
     );
   }
+
+  /// Le contenu d'un élément de liste ou d'une citation, rendu comme le
+  /// message lui-même : un élément peut porter plusieurs paragraphes, une
+  /// citation ou une liste imbriquée. Rendu en une seule ligne de texte, une
+  /// liste dans une liste perdait ses puces et deux paragraphes se collaient.
+  Widget _contenuEnBlocs(BuildContext context, dom.Element element) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: _construireBlocs(context, element),
+      );
 
   List<InlineSpan> _enfants(
     BuildContext context,
@@ -466,10 +512,7 @@ class _MessageRicheState extends State<MessageRiche> {
             child: _Citation(
               couleurTexte: couleurTexte,
               surFondPropre: surFondPropre,
-              child: Text.rich(
-                TextSpan(children: _enfants(context, noeud, const TextStyle())),
-                style: TextStyle(color: couleurTexte),
-              ),
+              child: _contenuEnBlocs(context, noeud),
             ),
           ),
         ];
