@@ -135,6 +135,41 @@ class MainActivity : FlutterActivity() {
                 }.start()
             }
         }
+        // Compression d'une video a l'envoi (CompressionVideo). Transformer
+        // travaille de lui-meme hors du fil principal et y rend ses resultats.
+        val canalVideo = MethodChannel(engine.dartExecutor.binaryMessenger, "rempart/video")
+        canalVideo.setMethodCallHandler { appel, reponse ->
+            val entree = appel.argument<String>("entree")
+            if (entree == null) {
+                reponse.notImplemented()
+                return@setMethodCallHandler
+            }
+            when (appel.method) {
+                "mesurer" -> try {
+                    reponse.success(CompressionVideo.mesurer(entree))
+                } catch (e: Exception) {
+                    reponse.error("mesure", e.message, null)
+                }
+
+                "compresser" -> CompressionVideo.compresser(
+                    applicationContext,
+                    entree,
+                    appel.argument<String>("sortie")!!,
+                    appel.argument<Int>("debit")!!,
+                    appel.argument<Int>("coteCourt") ?: 0,
+                    progression = { canalVideo.invokeMethod("progression", it) },
+                    fin = { erreur ->
+                        if (erreur == null) {
+                            reponse.success(null)
+                        } else {
+                            reponse.error("compression", erreur.message, null)
+                        }
+                    },
+                )
+
+                else -> reponse.notImplemented()
+            }
+        }
         // Apercu d'un PDF recu (ApercuPdf) : hors du fil principal, une page
         // prend une centaine de millisecondes a rendre.
         MethodChannel(engine.dartExecutor.binaryMessenger, "rempart/pdf").setMethodCallHandler {

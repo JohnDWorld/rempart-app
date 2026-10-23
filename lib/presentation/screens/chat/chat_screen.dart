@@ -26,6 +26,7 @@ import '../../../data/models/bot.dart';
 import '../../../data/models/matrix_extensions.dart';
 import '../../../data/providers/providers.dart';
 import '../../../data/services/compression_image.dart';
+import '../../../data/services/compression_video.dart';
 import '../../../data/services/enregistreur_vocal.dart';
 import '../../../data/services/lecteur_vocal.dart';
 import '../../../data/services/matrix_service.dart' show EnvoiInterrompu;
@@ -545,7 +546,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     if (!mounted) return;
     final choix = await _demanderLegende(fichiers, limite, legende: legende);
     if (choix == null || !mounted) return;
-    await _envoyerPiecesJointes(fichiers, choix);
+    await _envoyerPiecesJointes(fichiers, choix, limite: limite);
   }
 
   Future<_SourcePieceJointe?> _demanderSourceMaterial() {
@@ -725,8 +726,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   /// donnerait quinze fois le même texte dans le fil.
   Future<void> _envoyerPiecesJointes(
     List<matrix.MatrixFile> fichiers,
-    _ChoixEnvoi choix,
-  ) async {
+    _ChoixEnvoi choix, {
+    int? limite,
+  }) async {
     final total = fichiers.length;
     setState(() {
       _envoiPieceJointe = true;
@@ -736,7 +738,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     try {
       final aEnvoyer = [
         for (final fichier in fichiers)
-          choix.hauteQualite ? fichier : await _allege(fichier),
+          choix.hauteQualite ? fichier : await _allege(fichier, limite),
       ];
       if (total == 1) {
         await service.sendFile(
@@ -802,8 +804,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     );
   }
 
-  /// Version allégée d'une photo, ou le fichier tel quel si ça n'a pas de sens.
-  Future<matrix.MatrixFile> _allege(matrix.MatrixFile fichier) async {
+  /// Version allégée d'une photo ou d'une vidéo, ou le fichier tel quel si
+  /// ça n'a pas de sens.
+  Future<matrix.MatrixFile> _allege(
+    matrix.MatrixFile fichier,
+    int? limite,
+  ) async {
+    if (fichier.mimeType.startsWith('video/')) {
+      return _allegeVideo(fichier, limite);
+    }
     final octets = await CompressionImage.alleger(
       fichier.bytes,
       fichier.mimeType,
@@ -814,6 +823,40 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       name: fichier.name,
       mimeType: fichier.mimeType,
     );
+  }
+
+  /// Une vidéo en 720p (`CompressionVideo`), le bandeau disant où en est la
+  /// compression : c'est elle, et non le téléversement, qui prend le temps.
+  Future<matrix.MatrixFile> _allegeVideo(
+    matrix.MatrixFile video,
+    int? limite,
+  ) async {
+    final avant = _etapeEnvoi;
+    void etape(String texte) {
+      if (mounted) setState(() => _etapeEnvoi = texte);
+    }
+
+    etape('Compression de la vidéo...');
+    try {
+      final octets = await CompressionVideo.alleger(
+        video.bytes,
+        limite: limite,
+        progression: (pourcent) =>
+            etape('Compression de la vidéo · $pourcent %'),
+      );
+      if (octets == null) return video;
+      // Toujours un MP4 en sortie, quel que soit le format filmé.
+      final nom = video.name.contains('.')
+          ? '${video.name.substring(0, video.name.lastIndexOf('.'))}.mp4'
+          : '${video.name}.mp4';
+      return matrix.MatrixFile.fromMimeType(
+        bytes: octets,
+        name: nom,
+        mimeType: 'video/mp4',
+      );
+    } finally {
+      if (mounted) setState(() => _etapeEnvoi = avant);
+    }
   }
 
   /// Nom de fichier proposé par l'expéditeur, ramené à quelque chose de sûr.
@@ -2452,7 +2495,8 @@ class _ChoixEnvoi {
 
   final String legende;
 
-  /// Vrai : les photos partent telles quelles. Faux : elles sont allégées.
+  /// Vrai : photos et vidéos partent telles quelles. Faux : elles sont
+  /// allégées (vidéos en 720p).
   final bool hauteQualite;
 }
 
@@ -2491,22 +2535,31 @@ class _FeuilleLegendeState extends State<_FeuilleLegende> {
 
   bool _estImage(matrix.MatrixFile f) => f.mimeType.startsWith('image/');
 
-  /// L'interrupteur ne s'affiche que s'il change quelque chose : une vidéo ou
-  /// un document partent tels quels de toute façon.
+  /// Une vidéo s'allège avant l'envoi, là où l'appareil sait l'encoder.
+  bool _videoAllegeable(matrix.MatrixFile f) =>
+      f.mimeType.startsWith('video/') && CompressionVideo.disponible;
+
+  bool get _avecVideo => _fichiers.any(_videoAllegeable);
+
+  /// L'interrupteur ne s'affiche que s'il change quelque chose : un document
+  /// part tel quel de toute façon.
   bool get _qualiteEnJeu => _fichiers.any(
-        (f) => _estImage(f) && f.size > 300 * 1024,
+        (f) => (_estImage(f) && f.size > 300 * 1024) || _videoAllegeable(f),
       );
 
   int get _poidsTotal => _fichiers.fold(0, (total, f) => total + f.size);
 
-  /// Fichiers que le serveur refusera, quoi qu'on fasse.
+  /// Fichiers que le serveur refusera.
   ///
-  /// La compression ne les sauverait pas : elle ne touche pas aux vidéos, qui
-  /// sont précisément ce qui dépasse.
+  /// Une vidéo allégée n'en fait pas partie : la compression la ramène sous
+  /// la limite (ou dit, à l'envoi, qu'elle est trop longue). En qualité
+  /// d'origine, elle part telle quelle et dépasse.
   List<matrix.MatrixFile> get _tropLourds {
     final limite = widget.limiteEnvoi;
     if (limite == null) return const [];
-    return _fichiers.where((f) => f.size > limite).toList();
+    return _fichiers
+        .where((f) => f.size > limite && (_hd || !_videoAllegeable(f)))
+        .toList();
   }
 
   @override
@@ -2569,14 +2622,20 @@ class _FeuilleLegendeState extends State<_FeuilleLegende> {
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          _tropLourds.length == _fichiers.length
-                              ? 'Trop volumineux pour le serveur '
-                                  '(maximum '
-                                  '${CompressionImage.poidsLisible(widget.limiteEnvoi!)}). '
-                                  "L'envoi échouera."
-                              : '${_tropLourds.length} élément(s) dépassent '
-                                  '${CompressionImage.poidsLisible(widget.limiteEnvoi!)} '
-                                  'et seront refusés.',
+                          (_tropLourds.length == _fichiers.length
+                                  ? 'Trop volumineux pour le serveur '
+                                      '(maximum '
+                                      '${CompressionImage.poidsLisible(widget.limiteEnvoi!)}). '
+                                      "L'envoi échouera."
+                                  : '${_tropLourds.length} élément(s) dépassent '
+                                      '${CompressionImage.poidsLisible(widget.limiteEnvoi!)} '
+                                      'et seront refusés.') +
+                              // Une vidéo n'est trop lourde ici qu'en
+                              // qualité d'origine : dire la sortie.
+                              (_tropLourds.any(_videoAllegeable)
+                                  ? " Sans la qualité d'origine, la vidéo "
+                                      'serait allégée.'
+                                  : ''),
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.colorScheme.onErrorContainer,
                           ),
@@ -2594,10 +2653,15 @@ class _FeuilleLegendeState extends State<_FeuilleLegende> {
                   onChanged: (v) => setState(() => _hd = v),
                   title: const Text("Qualité d'origine (HD)"),
                   subtitle: Text(
-                    _hd
-                        ? 'Les photos partent telles quelles, sans perte.'
-                        : 'Les photos sont allégées : plus rapide, et '
-                            "indiscernable à l'écran.",
+                    switch ((_hd, _avecVideo)) {
+                      (true, false) =>
+                        'Les photos partent telles quelles, sans perte.',
+                      (true, true) => 'Envoyé tel quel, sans perte.',
+                      (false, false) => 'Les photos sont allégées : plus '
+                          "rapide, et indiscernable à l'écran.",
+                      (false, true) => "Allégé avant l'envoi (vidéos en "
+                          '720p) : plus rapide et bien plus léger.',
+                    },
                     style: theme.textTheme.bodySmall,
                   ),
                 ),

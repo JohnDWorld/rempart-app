@@ -94,4 +94,8 @@ dependencies {
     // l'installateur. Des greffons l'amenent deja de facon transitive ; la
     // declarer ici evite que le pont casse si l'un d'eux disparait.
     implementation("androidx.core:core-ktx:1.13.1")
+    // Compression des videos a l'envoi (CompressionVideo.kt). Meme version
+    // que le Media3 de video_player, pour n'en tirer qu'une copie.
+    implementation("androidx.media3:media3-transformer:1.9.2")
+    implementation("androidx.media3:media3-effect:1.9.2")
 }
