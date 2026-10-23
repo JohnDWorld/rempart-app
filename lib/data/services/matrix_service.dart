@@ -761,9 +761,58 @@ class MatrixService {
       } catch (e) {
         debugPrint('Matrix: self-sign échoué: $e');
       }
+      await _apresSignature();
       return recoveryKey;
     } finally {
       await uiaSub.cancel();
+    }
+  }
+
+  /// Ce qui suit la signature de cette session par le coffre.
+  ///
+  /// Le SDK envoie la signature au serveur sans mettre à jour sa copie locale
+  /// des clés : la session se croyait encore inconnue jusqu'à la synchro
+  /// suivante, ou plus. Deux effets, relevés le 2026-10-23 à une connexion
+  /// sur la version web :
+  /// - la demande de confirmation à un autre appareil partait quand même
+  ///   (`sessionAConfirmer`) ;
+  /// - les aperçus de la liste restaient vides. Le SDK va chercher les clés
+  ///   des derniers messages au moment où le coffre lui confie la clé de la
+  ///   sauvegarde (`KeyManager`, `setCacheCallback`), mais seulement si la
+  ///   session est déjà reconnue (`maybeAutoRequest` exige
+  ///   `!isUnknownSession`) : le coffre s'ouvrant AVANT la signature, la
+  ///   demande était sautée une fois pour toutes, et chaque conversation ne se
+  ///   déchiffrait qu'en l'ouvrant.
+  ///
+  /// On relit donc ses propres clés tout de suite, puis on refait la demande.
+  Future<void> _apresSignature() async {
+    final client = _client;
+    final keyManager = client?.encryption?.keyManager;
+    if (client == null || keyManager == null) return;
+    try {
+      final miennes = client.userDeviceKeys[client.userID];
+      if (miennes != null) {
+        miennes.outdated = true;
+        await client.updateUserDeviceKeys();
+      }
+      if (client.isUnknownSession) return;
+      for (final room in client.rooms) {
+        final dernier = room.lastEvent;
+        if (dernier == null ||
+            dernier.type != EventTypes.Encrypted ||
+            dernier.content['can_request_session'] != true) {
+          continue;
+        }
+        final session = dernier.content.tryGet<String>('session_id');
+        if (session == null) continue;
+        keyManager.maybeAutoRequest(
+          room.id,
+          session,
+          dernier.content.tryGet<String>('sender_key'),
+        );
+      }
+    } catch (e) {
+      debugPrint('Matrix: clés des derniers messages non redemandées ($e)');
     }
   }
 
@@ -860,6 +909,12 @@ class MatrixService {
   /// l'écran attendait indéfiniment une réponse que rien n'avait demandée.
   Future<KeyVerification?> demanderConfirmationDeSession() async {
     if (_confirmationDemandee || !sessionAConfirmer) return null;
+    // Une session qui détient les clés de signature du compte (coffre ouvert
+    // par le mot de passe) se signe seule : elle n'a rien à demander, même si
+    // sa signature n'est pas encore revenue du serveur.
+    if (await _client?.encryption?.crossSigning.isCached() ?? false) {
+      return null;
+    }
     final ici = _client?.deviceID;
     if (ici == null) return null;
 

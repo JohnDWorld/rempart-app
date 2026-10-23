@@ -221,8 +221,45 @@ class AuthService {
   /// Stream des changements d'état d'auth
   Stream<AuthState> get onAuthStateChange => _client.auth.onAuthStateChange;
 
+  /// Annonce le durcissement E2E dès le début d'une connexion, avant même que
+  /// Supabase réponde, et le tient jusqu'à ce qu'il soit lancé (ou qu'il n'y
+  /// en ait pas, connexion ratée comprise).
+  ///
+  /// L'accueil s'affiche dès que Supabase rend une session, avant que la
+  /// session Matrix soit ouverte, et donc avant que [_startEncryptionSetup]
+  /// existe. [awaitE2eSetup] ne trouvait alors rien à attendre : l'accueil
+  /// demandait à un autre appareil de confirmer une session que le coffre
+  /// allait signer quelques secondes plus tard (relevé le 2026-10-23 sur la
+  /// version web, où la session Matrix met plusieurs secondes à s'ouvrir), et
+  /// la clé de récupération d'un premier coffre pouvait ne jamais s'afficher.
+  Future<T> _annoncerDurcissement<T>(Future<T> Function() connexion) async {
+    final attente = Completer<String?>();
+    _e2eSetupFuture = attente.future;
+    try {
+      return await connexion();
+    } finally {
+      final lance = _e2eSetupFuture;
+      attente.complete(identical(lance, attente.future) ? null : lance);
+    }
+  }
+
   /// Inscription avec email et mot de passe (Supabase + Matrix)
   Future<AuthResponse> signUp({
+    required String email,
+    required String password,
+    String? displayName,
+    String? username,
+  }) =>
+      _annoncerDurcissement(
+        () => _inscrire(
+          email: email,
+          password: password,
+          displayName: displayName,
+          username: username,
+        ),
+      );
+
+  Future<AuthResponse> _inscrire({
     required String email,
     required String password,
     String? displayName,
@@ -287,6 +324,14 @@ class AuthService {
 
   /// Connexion avec email et mot de passe (Supabase + Matrix)
   Future<AuthResponse> signIn({
+    required String email,
+    required String password,
+  }) =>
+      _annoncerDurcissement(
+        () => _connecter(email: email, password: password),
+      );
+
+  Future<AuthResponse> _connecter({
     required String email,
     required String password,
   }) async {
