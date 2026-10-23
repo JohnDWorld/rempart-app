@@ -275,9 +275,19 @@ extension EventHelpers on Event {
     return estUnIdentifiant(nom, senderId) ? null : nom;
   }
 
+  /// Message chiffré dont cet appareil n'a pas la clé.
+  bool get estIllisible => messageType == MessageTypes.BadEncrypted;
+
   /// Obtient le texte à afficher
   String get displayText {
     if (redacted) return 'Message supprimé';
+    // Le corps est alors l'erreur du SDK, en anglais : « The sender has not
+    // sent us the session key. » s'affichait tel quel dans les bulles d'un
+    // appareil neuf (relevé le 2026-10-23). Le message reste visible, à la
+    // différence de ceux d'avant l'arrivée dans le groupe, que le fil masque :
+    // sa clé peut encore arriver d'un autre appareil du compte, et le SDK le
+    // déchiffre alors de lui-même.
+    if (estIllisible) return '🔒 Message illisible sur cet appareil';
     return libelleBouton ?? plaintextBody;
   }
 

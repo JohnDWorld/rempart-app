@@ -277,7 +277,8 @@ class MessageBubble extends ConsumerWidget {
                                           color: isMine
                                               ? colorScheme.onPrimary
                                               : colorScheme.onSurface,
-                                          fontStyle: affiche.isDeleted
+                                          fontStyle: affiche.isDeleted ||
+                                                  affiche.estIllisible
                                               ? FontStyle.italic
                                               : FontStyle.normal,
                                         ),
