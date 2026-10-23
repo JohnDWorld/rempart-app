@@ -125,6 +125,7 @@ class _MotDePasseOublieScreenState
               controller: _emailController,
               label: 'Adresse électronique',
               keyboardType: TextInputType.emailAddress,
+              autofillHints: const [AutofillHints.email],
               enabled: !_enCours,
             ),
             if (_erreur != null) ...[

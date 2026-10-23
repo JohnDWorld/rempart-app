@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
@@ -95,6 +96,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         displayName: _displayNameController.text.trim(),
         username: username,
       );
+      // Compte créé : le gestionnaire de mots de passe peut proposer de
+      // l'enregistrer.
+      TextInput.finishAutofillContext();
 
       if (mounted) {
         if (response.user != null && response.session != null) {
@@ -123,7 +127,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   /// en tire un au hasard), et s'il le faut, il se change ensuite.
   Future<String?> _refusDuNom(String username) async {
     try {
-      return await ref.read(profileServiceProvider).nomUtilisateurRefuse(username);
+      return await ref
+          .read(profileServiceProvider)
+          .nomUtilisateurRefuse(username);
     } catch (e) {
       debugPrint('Inscription : disponibilité du nom inconnue ($e)');
       return null;
@@ -302,274 +308,289 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               constraints: const BoxConstraints(maxWidth: 420),
               child: Form(
                 key: _formKey,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Logo
-                    SvgPicture.asset(
-                      'assets/images/rempart-logo.svg',
-                      width: 64,
-                      height: 64,
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Titre
-                    Text(
-                      'Créer un compte',
-                      style: theme.textTheme.headlineMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
+                // Adresse et mot de passe dans un même groupe : le
+                // gestionnaire de mots de passe propose d'en générer un, puis
+                // d'enregistrer le tout.
+                child: AutofillGroup(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Logo
+                      SvgPicture.asset(
+                        'assets/images/rempart-logo.svg',
+                        width: 64,
+                        height: 64,
                       ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
+                      const SizedBox(height: 16),
 
-                    Text(
-                      'Rejoignez la messagerie souveraine',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 32),
-
-                    // Message d'erreur
-                    if (_errorMessage != null) ...[
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.errorContainer,
-                          borderRadius: BorderRadius.circular(8),
+                      // Titre
+                      Text(
+                        'Créer un compte',
+                        style: theme.textTheme.headlineMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
                         ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.error_outline,
-                              color: theme.colorScheme.error,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                _errorMessage!,
-                                style: TextStyle(
-                                  color: theme.colorScheme.onErrorContainer,
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+
+                      Text(
+                        'Rejoignez la messagerie souveraine',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 32),
+
+                      // Message d'erreur
+                      if (_errorMessage != null) ...[
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.errorContainer,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.error_outline,
+                                color: theme.colorScheme.error,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  _errorMessage!,
+                                  style: TextStyle(
+                                    color: theme.colorScheme.onErrorContainer,
+                                  ),
                                 ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+
+                      // Nom d'affichage
+                      TextFormField(
+                        controller: _displayNameController,
+                        textInputAction: TextInputAction.next,
+                        textCapitalization: TextCapitalization.words,
+                        decoration: const InputDecoration(
+                          labelText: "Nom d'affichage",
+                          hintText: 'Comment voulez-vous être appelé ?',
+                          prefixIcon: Icon(Icons.person_outlined),
+                        ),
+                        onChanged: (value) {
+                          if (_usernameSaisi) return;
+                          _usernameController.text =
+                              suggestionNomUtilisateur(value);
+                          _verifNom.saisie(_usernameController.text);
+                        },
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Veuillez entrer votre nom';
+                          }
+                          if (value.length >
+                              AppConstants.maxDisplayNameLength) {
+                            return 'Le nom est trop long';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Nom d'utilisateur : ce qui distingue deux homonymes.
+                      // Proposé d'après le nom d'affichage tant qu'on n'y
+                      // touche pas.
+                      ListenableBuilder(
+                        listenable: _verifNom,
+                        builder: (context, _) => TextFormField(
+                          controller: _usernameController,
+                          textInputAction: TextInputAction.next,
+                          autocorrect: false,
+                          enableSuggestions: false,
+                          decoration: InputDecoration(
+                            labelText: "Nom d'utilisateur",
+                            hintText: 'marie.dupont',
+                            helperText: _verifNom.annonce ??
+                                "Unique : c'est par lui qu'on vous trouve",
+                            prefixIcon: const Icon(Icons.alternate_email),
+                            suffixIcon: indicateurNomUtilisateur(
+                                context, _verifNom.etat),
+                          ),
+                          forceErrorText: _erreurUsername ?? _verifNom.erreur,
+                          onChanged: (value) {
+                            _usernameSaisi = true;
+                            if (_erreurUsername != null) {
+                              setState(() => _erreurUsername = null);
+                            }
+                            _verifNom.saisie(value);
+                          },
+                          validator: (value) => problemeNomUtilisateur(
+                            normaliserNomUtilisateur(value ?? ''),
+                          ),
                         ),
                       ),
                       const SizedBox(height: 16),
-                    ],
 
-                    // Nom d'affichage
-                    TextFormField(
-                      controller: _displayNameController,
-                      textInputAction: TextInputAction.next,
-                      textCapitalization: TextCapitalization.words,
-                      decoration: const InputDecoration(
-                        labelText: "Nom d'affichage",
-                        hintText: 'Comment voulez-vous être appelé ?',
-                        prefixIcon: Icon(Icons.person_outlined),
-                      ),
-                      onChanged: (value) {
-                        if (_usernameSaisi) return;
-                        _usernameController.text =
-                            suggestionNomUtilisateur(value);
-                        _verifNom.saisie(_usernameController.text);
-                      },
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Veuillez entrer votre nom';
-                        }
-                        if (value.length > AppConstants.maxDisplayNameLength) {
-                          return 'Le nom est trop long';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Nom d'utilisateur : ce qui distingue deux homonymes.
-                    // Proposé d'après le nom d'affichage tant qu'on n'y
-                    // touche pas.
-                    ListenableBuilder(
-                      listenable: _verifNom,
-                      builder: (context, _) => TextFormField(
-                        controller: _usernameController,
+                      // Email
+                      TextFormField(
+                        controller: _emailController,
+                        keyboardType: TextInputType.emailAddress,
                         textInputAction: TextInputAction.next,
+                        // L'identifiant de connexion, comme à l'écran de
+                        // connexion. Le nom d'utilisateur (@nom) n'en est pas
+                        // un : il reste sans indication.
+                        autofillHints: const [
+                          AutofillHints.username,
+                          AutofillHints.email,
+                        ],
                         autocorrect: false,
-                        enableSuggestions: false,
-                        decoration: InputDecoration(
-                          labelText: "Nom d'utilisateur",
-                          hintText: 'marie.dupont',
-                          helperText: _verifNom.annonce ??
-                              "Unique : c'est par lui qu'on vous trouve",
-                          prefixIcon: const Icon(Icons.alternate_email),
-                          suffixIcon:
-                              indicateurNomUtilisateur(context, _verifNom.etat),
+                        decoration: const InputDecoration(
+                          labelText: 'Email',
+                          hintText: 'votre@email.com',
+                          prefixIcon: Icon(Icons.email_outlined),
                         ),
-                        forceErrorText: _erreurUsername ?? _verifNom.erreur,
-                        onChanged: (value) {
-                          _usernameSaisi = true;
-                          if (_erreurUsername != null) {
-                            setState(() => _erreurUsername = null);
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Veuillez entrer votre email';
                           }
-                          _verifNom.saisie(value);
+                          if (!value.contains('@') || !value.contains('.')) {
+                            return 'Veuillez entrer un email valide';
+                          }
+                          return null;
                         },
-                        validator: (value) => problemeNomUtilisateur(
-                          normaliserNomUtilisateur(value ?? ''),
-                        ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
+                      const SizedBox(height: 16),
 
-                    // Email
-                    TextFormField(
-                      controller: _emailController,
-                      keyboardType: TextInputType.emailAddress,
-                      textInputAction: TextInputAction.next,
-                      autocorrect: false,
-                      decoration: const InputDecoration(
-                        labelText: 'Email',
-                        hintText: 'votre@email.com',
-                        prefixIcon: Icon(Icons.email_outlined),
-                      ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Veuillez entrer votre email';
-                        }
-                        if (!value.contains('@') || !value.contains('.')) {
-                          return 'Veuillez entrer un email valide';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Mot de passe
-                    TextFormField(
-                      controller: _passwordController,
-                      obscureText: _obscurePassword,
-                      textInputAction: TextInputAction.next,
-                      decoration: InputDecoration(
-                        labelText: 'Mot de passe',
-                        helperText: consigneMotDePasse,
-                        prefixIcon: const Icon(Icons.lock_outlined),
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _obscurePassword
-                                ? Icons.visibility_outlined
-                                : Icons.visibility_off_outlined,
+                      // Mot de passe
+                      TextFormField(
+                        controller: _passwordController,
+                        obscureText: _obscurePassword,
+                        autofillHints: const [AutofillHints.newPassword],
+                        textInputAction: TextInputAction.next,
+                        decoration: InputDecoration(
+                          labelText: 'Mot de passe',
+                          helperText: consigneMotDePasse,
+                          prefixIcon: const Icon(Icons.lock_outlined),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscurePassword
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _obscurePassword = !_obscurePassword;
+                              });
+                            },
                           ),
-                          onPressed: () {
-                            setState(() {
-                              _obscurePassword = !_obscurePassword;
-                            });
-                          },
                         ),
+                        validator: _validatePassword,
                       ),
-                      validator: _validatePassword,
-                    ),
-                    const SizedBox(height: 16),
+                      const SizedBox(height: 16),
 
-                    // Confirmation mot de passe
-                    TextFormField(
-                      controller: _confirmPasswordController,
-                      obscureText: _obscureConfirmPassword,
-                      textInputAction: TextInputAction.done,
-                      onFieldSubmitted: (_) => _handleRegister(),
-                      decoration: InputDecoration(
-                        labelText: 'Confirmer le mot de passe',
-                        prefixIcon: const Icon(Icons.lock_outlined),
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _obscureConfirmPassword
-                                ? Icons.visibility_outlined
-                                : Icons.visibility_off_outlined,
+                      // Confirmation mot de passe
+                      TextFormField(
+                        controller: _confirmPasswordController,
+                        obscureText: _obscureConfirmPassword,
+                        autofillHints: const [AutofillHints.newPassword],
+                        textInputAction: TextInputAction.done,
+                        onFieldSubmitted: (_) => _handleRegister(),
+                        decoration: InputDecoration(
+                          labelText: 'Confirmer le mot de passe',
+                          prefixIcon: const Icon(Icons.lock_outlined),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscureConfirmPassword
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _obscureConfirmPassword =
+                                    !_obscureConfirmPassword;
+                              });
+                            },
                           ),
-                          onPressed: () {
-                            setState(() {
-                              _obscureConfirmPassword =
-                                  !_obscureConfirmPassword;
-                            });
-                          },
                         ),
-                      ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Veuillez confirmer votre mot de passe';
-                        }
-                        if (value != _passwordController.text) {
-                          return 'Les mots de passe ne correspondent pas';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 24),
-
-                    // Acceptation CGU
-                    CheckboxListTile.adaptive(
-                      value: _acceptTerms,
-                      onChanged: (value) {
-                        setState(() {
-                          _acceptTerms = value ?? false;
-                          if (_acceptTerms) {
-                            _errorMessage = null;
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Veuillez confirmer votre mot de passe';
                           }
-                        });
-                      },
-                      controlAffinity: ListTileControlAffinity.leading,
-                      contentPadding: EdgeInsets.zero,
-                      title: RichText(
-                        text: TextSpan(
-                          style: theme.textTheme.bodyMedium,
-                          children: [
-                            const TextSpan(text: "J'accepte les "),
-                            TextSpan(
-                              text: "conditions d'utilisation",
-                              style: TextStyle(
-                                color: theme.colorScheme.primary,
-                                fontWeight: FontWeight.w500,
+                          if (value != _passwordController.text) {
+                            return 'Les mots de passe ne correspondent pas';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Acceptation CGU
+                      CheckboxListTile.adaptive(
+                        value: _acceptTerms,
+                        onChanged: (value) {
+                          setState(() {
+                            _acceptTerms = value ?? false;
+                            if (_acceptTerms) {
+                              _errorMessage = null;
+                            }
+                          });
+                        },
+                        controlAffinity: ListTileControlAffinity.leading,
+                        contentPadding: EdgeInsets.zero,
+                        title: RichText(
+                          text: TextSpan(
+                            style: theme.textTheme.bodyMedium,
+                            children: [
+                              const TextSpan(text: "J'accepte les "),
+                              TextSpan(
+                                text: "conditions d'utilisation",
+                                style: TextStyle(
+                                  color: theme.colorScheme.primary,
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
-                            ),
-                            const TextSpan(text: ' et la '),
-                            TextSpan(
-                              text: 'politique de confidentialité',
-                              style: TextStyle(
-                                color: theme.colorScheme.primary,
-                                fontWeight: FontWeight.w500,
+                              const TextSpan(text: ' et la '),
+                              TextSpan(
+                                text: 'politique de confidentialité',
+                                style: TextStyle(
+                                  color: theme.colorScheme.primary,
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 24),
+                      const SizedBox(height: 24),
 
-                    // Bouton inscription
-                    LoadingButton(
-                      onPressed: _handleRegister,
-                      isLoading: _isLoading,
-                      child: const Text('Créer mon compte'),
-                    ),
-                    const SizedBox(height: 16),
+                      // Bouton inscription
+                      LoadingButton(
+                        onPressed: _handleRegister,
+                        isLoading: _isLoading,
+                        child: const Text('Créer mon compte'),
+                      ),
+                      const SizedBox(height: 16),
 
-                    // Lien connexion
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          'Déjà un compte ?',
-                          style: theme.textTheme.bodyMedium,
-                        ),
-                        TextButton(
-                          onPressed: () => context.go('/login'),
-                          child: const Text('Se connecter'),
-                        ),
-                      ],
-                    ),
-                  ],
+                      // Lien connexion
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            'Déjà un compte ?',
+                            style: theme.textTheme.bodyMedium,
+                          ),
+                          TextButton(
+                            onPressed: () => context.go('/login'),
+                            child: const Text('Se connecter'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

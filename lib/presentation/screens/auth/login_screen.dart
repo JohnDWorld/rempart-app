@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
@@ -70,6 +71,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
+      // Connexion réussie : le gestionnaire de mots de passe peut proposer
+      // de les enregistrer.
+      TextInput.finishAutofillContext();
 
       if (mounted) {
         context.go('/home');
@@ -140,183 +144,199 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   constraints: const BoxConstraints(maxWidth: 420),
                   child: Form(
                     key: _formKey,
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        // Logo
-                        SvgPicture.asset(
-                          'assets/images/rempart-logo.svg',
-                          width: 80,
-                          height: 80,
-                        ),
-                        const SizedBox(height: 16),
-
-                        // Titre
-                        Text(
-                          'Connexion',
-                          style: theme.textTheme.headlineMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 8),
-
-                        Text(
-                          'Connectez-vous à votre compte Rempart',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 32),
-
-                        // Message d'erreur
-                        if (_errorMessage != null) ...[
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.errorContainer,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.error_outline,
-                                  color: theme.colorScheme.error,
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Text(
-                                    _errorMessage!,
-                                    style: TextStyle(
-                                      color: theme.colorScheme.onErrorContainer,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
+                    // Un seul groupe : le gestionnaire de mots de passe voit
+                    // l'adresse et le mot de passe comme un même formulaire,
+                    // et remplit les deux d'un coup.
+                    child: AutofillGroup(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          // Logo
+                          SvgPicture.asset(
+                            'assets/images/rempart-logo.svg',
+                            width: 80,
+                            height: 80,
                           ),
                           const SizedBox(height: 16),
-                        ],
 
-                        // Email
-                        TextFormField(
-                          controller: _emailController,
-                          keyboardType: TextInputType.emailAddress,
-                          textInputAction: TextInputAction.next,
-                          autocorrect: false,
-                          decoration: const InputDecoration(
-                            labelText: 'Email',
-                            hintText: 'votre@email.com',
-                            prefixIcon: Icon(Icons.email_outlined),
+                          // Titre
+                          Text(
+                            'Connexion',
+                            style: theme.textTheme.headlineMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                            textAlign: TextAlign.center,
                           ),
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Veuillez entrer votre email';
-                            }
-                            if (!value.contains('@') || !value.contains('.')) {
-                              return 'Veuillez entrer un email valide';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 16),
+                          const SizedBox(height: 8),
 
-                        // Mot de passe
-                        TextFormField(
-                          controller: _passwordController,
-                          focusNode: _passwordFocus,
-                          obscureText: _obscurePassword,
-                          textInputAction: TextInputAction.done,
-                          onFieldSubmitted: (_) => _handleLogin(),
-                          decoration: InputDecoration(
-                            labelText: 'Mot de passe',
-                            prefixIcon: const Icon(Icons.lock_outlined),
-                            suffixIcon: IconButton(
-                              icon: Icon(
-                                _obscurePassword
-                                    ? Icons.visibility_outlined
-                                    : Icons.visibility_off_outlined,
+                          Text(
+                            'Connectez-vous à votre compte Rempart',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 32),
+
+                          // Message d'erreur
+                          if (_errorMessage != null) ...[
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.errorContainer,
+                                borderRadius: BorderRadius.circular(8),
                               ),
-                              onPressed: () {
-                                setState(() {
-                                  _obscurePassword = !_obscurePassword;
-                                });
-                              },
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.error_outline,
+                                    color: theme.colorScheme.error,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      _errorMessage!,
+                                      style: TextStyle(
+                                        color:
+                                            theme.colorScheme.onErrorContainer,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                          ],
+
+                          // Email
+                          TextFormField(
+                            controller: _emailController,
+                            keyboardType: TextInputType.emailAddress,
+                            textInputAction: TextInputAction.next,
+                            autocorrect: false,
+                            // « username » d'abord : c'est l'identifiant de
+                            // connexion, même quand c'est une adresse, et la
+                            // version web ne transmet au navigateur que la
+                            // première indication.
+                            autofillHints: const [
+                              AutofillHints.username,
+                              AutofillHints.email,
+                            ],
+                            decoration: const InputDecoration(
+                              labelText: 'Email',
+                              hintText: 'votre@email.com',
+                              prefixIcon: Icon(Icons.email_outlined),
+                            ),
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Veuillez entrer votre email';
+                              }
+                              if (!value.contains('@') ||
+                                  !value.contains('.')) {
+                                return 'Veuillez entrer un email valide';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 16),
+
+                          // Mot de passe
+                          TextFormField(
+                            controller: _passwordController,
+                            focusNode: _passwordFocus,
+                            obscureText: _obscurePassword,
+                            autofillHints: const [AutofillHints.password],
+                            textInputAction: TextInputAction.done,
+                            onFieldSubmitted: (_) => _handleLogin(),
+                            decoration: InputDecoration(
+                              labelText: 'Mot de passe',
+                              prefixIcon: const Icon(Icons.lock_outlined),
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _obscurePassword
+                                      ? Icons.visibility_outlined
+                                      : Icons.visibility_off_outlined,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _obscurePassword = !_obscurePassword;
+                                  });
+                                },
+                              ),
+                            ),
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Veuillez entrer votre mot de passe';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 8),
+
+                          // Mot de passe oublié
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              onPressed: () =>
+                                  context.push('/mot-de-passe-oublie'),
+                              child: const Text('Mot de passe oublié ?'),
                             ),
                           ),
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Veuillez entrer votre mot de passe';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 8),
+                          const SizedBox(height: 24),
 
-                        // Mot de passe oublié
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton(
-                            onPressed: () =>
-                                context.push('/mot-de-passe-oublie'),
-                            child: const Text('Mot de passe oublié ?'),
+                          // Bouton connexion
+                          LoadingButton(
+                            onPressed: _handleLogin,
+                            isLoading: _isLoading,
+                            child: const Text('Se connecter'),
                           ),
-                        ),
-                        const SizedBox(height: 24),
+                          const SizedBox(height: 8),
 
-                        // Bouton connexion
-                        LoadingButton(
-                          onPressed: _handleLogin,
-                          isLoading: _isLoading,
-                          child: const Text('Se connecter'),
-                        ),
-                        const SizedBox(height: 8),
+                          // Voir le commentaire cote Cupertino : meme entree, pour
+                          // ne pas avoir a retaper son mot de passe partout.
+                          TextButton.icon(
+                            onPressed: () => context.go('/connexion-qr'),
+                            icon: const Icon(Icons.qr_code_2),
+                            label: const Text('Se connecter avec un code'),
+                          ),
+                          const SizedBox(height: 8),
 
-                        // Voir le commentaire cote Cupertino : meme entree, pour
-                        // ne pas avoir a retaper son mot de passe partout.
-                        TextButton.icon(
-                          onPressed: () => context.go('/connexion-qr'),
-                          icon: const Icon(Icons.qr_code_2),
-                          label: const Text('Se connecter avec un code'),
-                        ),
-                        const SizedBox(height: 8),
-
-                        // Divider
-                        Row(
-                          children: [
-                            const Expanded(child: Divider()),
-                            Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 16),
-                              child: Text(
-                                'ou',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
+                          // Divider
+                          Row(
+                            children: [
+                              const Expanded(child: Divider()),
+                              Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 16),
+                                child: Text(
+                                  'ou',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                  ),
                                 ),
                               ),
-                            ),
-                            const Expanded(child: Divider()),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
+                              const Expanded(child: Divider()),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
 
-                        // Lien inscription
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              'Pas encore de compte ?',
-                              style: theme.textTheme.bodyMedium,
-                            ),
-                            TextButton(
-                              onPressed: () => context.go('/register'),
-                              child: const Text('Créer un compte'),
-                            ),
-                          ],
-                        ),
-                      ],
+                          // Lien inscription
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                'Pas encore de compte ?',
+                                style: theme.textTheme.bodyMedium,
+                              ),
+                              TextButton(
+                                onPressed: () => context.go('/register'),
+                                child: const Text('Créer un compte'),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -356,7 +376,8 @@ class _VoileConnexion extends StatelessWidget {
                 const SizedBox(
                   width: 44,
                   height: 44,
-                  child: CircularProgressIndicator.adaptive(valueColor: AlwaysStoppedAnimation<Color>(Colors.white)),
+                  child: CircularProgressIndicator.adaptive(
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white)),
                 ),
               const SizedBox(height: 20),
               const Text(

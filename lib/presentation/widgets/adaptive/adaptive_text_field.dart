@@ -24,6 +24,7 @@ class AdaptiveTextField extends StatelessWidget {
     this.helperText,
     this.errorText,
     this.enabled = true,
+    this.autofillHints,
     super.key,
   });
 
@@ -44,6 +45,11 @@ class AdaptiveTextField extends StatelessWidget {
   final String? helperText;
   final String? errorText;
   final bool enabled;
+
+  /// Ce que le champ attend, pour les gestionnaires de mots de passe
+  /// ([AutofillHints]). Sans lui, la version web marque le champ
+  /// `autocomplete="off"`, et aucun gestionnaire ne propose rien.
+  final Iterable<String>? autofillHints;
 
   @override
   Widget build(BuildContext context) {
@@ -90,6 +96,7 @@ class AdaptiveTextField extends StatelessWidget {
       onChanged: onChanged,
       onSubmitted: onSubmitted,
       enabled: enabled,
+      autofillHints: autofillHints,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       decoration: BoxDecoration(
         color: isDark
@@ -165,6 +172,7 @@ class AdaptiveTextField extends StatelessWidget {
       onFieldSubmitted: onSubmitted,
       validator: validator,
       enabled: enabled,
+      autofillHints: autofillHints,
     );
   }
 }
