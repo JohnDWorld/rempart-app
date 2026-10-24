@@ -1326,123 +1326,132 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   void _showMaterialMessageOptions(matrix.Event event, bool isMine) {
     feuilleAdaptative(
       context: context,
+      // Une feuille du bas s'arrête par défaut aux 9/16 de l'écran : sur un de
+      // ses propres messages photo, une dizaine d'entrées, et celles du bas
+      // étaient coupées, sans moyen de les atteindre (relevé le 2026-10-24).
+      // La feuille prend donc la hauteur de son contenu, et défile au-delà.
+      isScrollControlled: true,
       builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (!event.redacted) _rangeeReactions(event),
-            ListTile(
-              leading: const Icon(Icons.reply),
-              title: const Text('Répondre'),
-              onTap: () {
-                Navigator.pop(context);
-                _setReplyTo(event);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.copy),
-              title: const Text('Copier'),
-              onTap: () {
-                Navigator.pop(context);
-                _copierMessage(event);
-              },
-            ),
-            // Pour n'en copier qu'un morceau : « Copier » prend tout, ce qui
-            // ne convient pas quand on veut juste une adresse ou une date au
-            // milieu d'un long message.
-            if (_texteAffiche(event).trim().isNotEmpty)
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (!event.redacted) _rangeeReactions(event),
               ListTile(
-                leading: const Icon(Icons.text_fields),
-                title: const Text('Sélectionner le texte'),
+                leading: const Icon(Icons.reply),
+                title: const Text('Répondre'),
                 onTap: () {
                   Navigator.pop(context);
-                  ouvrirSelectionTexte(context, _texteAffiche(event));
-                },
-              ),
-            if (event.porteUnFichier) ...[
-              ListTile(
-                leading: const Icon(Icons.download_outlined),
-                title: Text(event.isImageMessage || event.isVideoMessage
-                    ? 'Enregistrer dans la galerie'
-                    : 'Enregistrer'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _enregistrerPieceJointe(event);
+                  _setReplyTo(event);
                 },
               ),
               ListTile(
-                leading: Icon(Icons.adaptive.share),
-                title: const Text('Partager'),
+                leading: const Icon(Icons.copy),
+                title: const Text('Copier'),
                 onTap: () {
                   Navigator.pop(context);
-                  _partagerPieceJointe(event);
+                  _copierMessage(event);
                 },
               ),
-            ],
-            if (isMine && !event.redacted) ...[
-              // Quand il est parti, et qui l'a lu : rien à dire d'un message
-              // que le serveur n'a pas encore accepté.
-              if (event.status.isSent)
+              // Pour n'en copier qu'un morceau : « Copier » prend tout, ce qui
+              // ne convient pas quand on veut juste une adresse ou une date au
+              // milieu d'un long message.
+              if (_texteAffiche(event).trim().isNotEmpty)
                 ListTile(
-                  leading: const Icon(Icons.info_outline),
-                  title: const Text('Informations'),
+                  leading: const Icon(Icons.text_fields),
+                  title: const Text('Sélectionner le texte'),
                   onTap: () {
                     Navigator.pop(context);
-                    _montrerInformations(event);
+                    ouvrirSelectionTexte(context, _texteAffiche(event));
                   },
                 ),
-              // Pas de « Modifier » sur un message qui n'est jamais parti :
-              // une édition remplace un événement du serveur, et il n'y en a
-              // aucun à remplacer. L'entrée ne pouvait qu'échouer.
-              if (event.status.isSent)
+              if (event.porteUnFichier) ...[
                 ListTile(
-                  leading: const Icon(Icons.edit),
-                  title: const Text('Modifier'),
+                  leading: const Icon(Icons.download_outlined),
+                  title: Text(event.isImageMessage || event.isVideoMessage
+                      ? 'Enregistrer dans la galerie'
+                      : 'Enregistrer'),
                   onTap: () {
                     Navigator.pop(context);
-                    _showEditDialog(event);
+                    _enregistrerPieceJointe(event);
                   },
                 ),
-              ListTile(
-                leading: Icon(
-                  Icons.delete,
-                  color: Theme.of(context).colorScheme.error,
+                ListTile(
+                  leading: Icon(Icons.adaptive.share),
+                  title: const Text('Partager'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _partagerPieceJointe(event);
+                  },
                 ),
-                title: Text(
-                  'Supprimer',
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ],
+              if (isMine && !event.redacted) ...[
+                // Quand il est parti, et qui l'a lu : rien à dire d'un message
+                // que le serveur n'a pas encore accepté.
+                if (event.status.isSent)
+                  ListTile(
+                    leading: const Icon(Icons.info_outline),
+                    title: const Text('Informations'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _montrerInformations(event);
+                    },
+                  ),
+                // Pas de « Modifier » sur un message qui n'est jamais parti :
+                // une édition remplace un événement du serveur, et il n'y en a
+                // aucun à remplacer. L'entrée ne pouvait qu'échouer.
+                if (event.status.isSent)
+                  ListTile(
+                    leading: const Icon(Icons.edit),
+                    title: const Text('Modifier'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _showEditDialog(event);
+                    },
+                  ),
+                ListTile(
+                  leading: Icon(
+                    Icons.delete,
+                    color: Theme.of(context).colorScheme.error,
+                  ),
+                  title: Text(
+                    'Supprimer',
+                    style:
+                        TextStyle(color: Theme.of(context).colorScheme.error),
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _confirmDelete(event);
+                  },
                 ),
-                onTap: () {
-                  Navigator.pop(context);
-                  _confirmDelete(event);
-                },
-              ),
+              ],
+              if (!isMine) ...[
+                ListTile(
+                  leading: const Icon(Icons.flag_outlined),
+                  title: const Text('Signaler ce message'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _signalerMessage(event);
+                  },
+                ),
+                ListTile(
+                  leading: Icon(
+                    Icons.block,
+                    color: Theme.of(context).colorScheme.error,
+                  ),
+                  title: Text(
+                    'Bloquer cette personne',
+                    style:
+                        TextStyle(color: Theme.of(context).colorScheme.error),
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _bloquer(event.senderId);
+                  },
+                ),
+              ],
             ],
-            if (!isMine) ...[
-              ListTile(
-                leading: const Icon(Icons.flag_outlined),
-                title: const Text('Signaler ce message'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _signalerMessage(event);
-                },
-              ),
-              ListTile(
-                leading: Icon(
-                  Icons.block,
-                  color: Theme.of(context).colorScheme.error,
-                ),
-                title: Text(
-                  'Bloquer cette personne',
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
-                onTap: () {
-                  Navigator.pop(context);
-                  _bloquer(event.senderId);
-                },
-              ),
-            ],
-          ],
+          ),
         ),
       ),
     );

@@ -178,6 +178,10 @@ Future<T?> feuilleAdaptative<T>({
       context: context,
       showDragHandle: showDragHandle,
       isScrollControlled: isScrollControlled,
+      // Une feuille qui peut prendre toute la hauteur s'arrête sous la barre
+      // d'état : sinon, quand son contenu remplit l'écran, le haut passait
+      // dessous (vu au zoom d'affichage maximal, réactions sous l'heure).
+      useSafeArea: isScrollControlled,
       builder: builder,
     );
   }
