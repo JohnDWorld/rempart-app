@@ -170,8 +170,9 @@ class _CupertinoAppWrapperState extends ConsumerState<_CupertinoAppWrapper>
           // d'office. Sans lui, tout `ScaffoldMessenger.of(context)` echoue sur
           // iOS - et les ecrans recents (appareils, mes bots, boutique,
           // profil, mot de passe...) signalent tous leurs succes et leurs
-          // erreurs par un `SnackBar`.
-          child: MessagerRempart(
+          // erreurs par un `SnackBar`. La variante Cupertino, parce que la
+          // verification de Flutter ne reconnait pas une sous-classe.
+          child: MessagerRempartCupertino(
             child: EcouteVerifications(
               demandes: MatrixService.instance.demandesDeVerification,
               enfant: child ?? const SizedBox.shrink(),

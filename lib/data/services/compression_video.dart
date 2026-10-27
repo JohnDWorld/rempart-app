@@ -93,19 +93,19 @@ PlanVideo planCompression({
 }
 
 /// Allège une vidéo avant l'envoi, comme WhatsApp : 720p, H.264, par
-/// l'encodeur matériel du téléphone (`CompressionVideo.kt`, Media3
-/// Transformer). Une vidéo de 100 Mo, refusée par le serveur (50 Mo),
-/// partait sur WhatsApp en une douzaine (relevé le 2026-10-23).
+/// l'encodeur matériel du téléphone : `CompressionVideo.kt` (Media3
+/// Transformer) sur Android, `CompressionVideo.swift` (AVAssetReader et
+/// AVAssetWriter) sur iPhone, même canal et même contrat. Une vidéo de
+/// 100 Mo, refusée par le serveur (50 Mo), partait sur WhatsApp en une
+/// douzaine (relevé le 2026-10-23).
 ///
-/// Android seulement : sur iPhone il faudra AVAssetExportSession (donc le
-/// Mac), et le navigateur n'a pas d'encodeur à portée ; la vidéo y part
-/// telle quelle.
+/// Le navigateur n'a pas d'encodeur à portée : la vidéo y part telle quelle.
 class CompressionVideo {
   const CompressionVideo._();
 
   static const _canal = MethodChannel('rempart/video');
 
-  static bool get disponible => estAndroid;
+  static bool get disponible => estAndroid || estIOS;
 
   /// La vidéo allégée, ou null si elle doit partir telle quelle (rien à y
   /// gagner, ou compression impossible : mieux vaut une vidéo lourde qu'une

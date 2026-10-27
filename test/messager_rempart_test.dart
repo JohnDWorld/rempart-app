@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:rempart_app/presentation/widgets/common/messager_rempart.dart';
@@ -43,5 +44,48 @@ void main() {
     await tester.tap(find.text('Conversation supprimée'));
     await tester.pumpAndSettle();
     expect(find.text('Conversation supprimée'), findsNothing);
+  });
+
+  group('sous CupertinoApp (iPhone)', () {
+    Future<void> monterSousCupertino(
+      WidgetTester tester,
+      Widget Function(Widget) messager,
+    ) =>
+        tester.pumpWidget(
+          CupertinoApp(
+            builder: (context, child) => messager(child!),
+            home: Scaffold(
+              body: Builder(
+                builder: (context) {
+                  contexte = context;
+                  return const SizedBox.expand();
+                },
+              ),
+            ),
+          ),
+        );
+
+    testWidgets(
+        'MessagerRempart seul ne passe pas la vérification de Flutter : '
+        "c'est le piège", (tester) async {
+      await monterSousCupertino(tester, (c) => MessagerRempart(child: c));
+      expect(() => afficher('Profil enregistré'), throwsFlutterError);
+    });
+
+    testWidgets('MessagerRempartCupertino affiche, remplace et ferme',
+        (tester) async {
+      await monterSousCupertino(
+        tester,
+        (c) => MessagerRempartCupertino(child: c),
+      );
+      afficher('Premier');
+      afficher('Profil enregistré');
+      await tester.pumpAndSettle();
+      expect(find.text('Premier'), findsNothing);
+      expect(find.text('Profil enregistré'), findsOneWidget);
+      await tester.tap(find.text('Profil enregistré'));
+      await tester.pumpAndSettle();
+      expect(find.text('Profil enregistré'), findsNothing);
+    });
   });
 }

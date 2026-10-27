@@ -5,20 +5,20 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../core/plateforme.dart';
 
-/// Les pages d'un PDF, rendues par le moteur PDF d'Android (`ApercuPdf.kt`,
-/// canal `rempart/pdf`) : aucune bibliothèque de plus, et le fichier
-/// déchiffré ne quitte pas Rempart.
+/// Les pages d'un PDF, rendues par le moteur PDF du système, canal
+/// `rempart/pdf` : `ApercuPdf.kt` (PdfRenderer) sur Android,
+/// `ApercuPdf.swift` (PDFKit) sur iPhone. Aucune bibliothèque de plus, et le
+/// fichier déchiffré ne quitte pas Rempart.
 ///
-/// Android seulement. Sur iPhone il faudrait PDFKit (donc le Mac), et le
-/// navigateur sait afficher un PDF tout seul.
+/// Le navigateur sait afficher un PDF tout seul.
 class ApercuPdf {
   const ApercuPdf();
 
   static const _canal = MethodChannel('rempart/pdf');
 
-  bool get disponible => estAndroid;
+  bool get disponible => estAndroid || estIOS;
 
-  /// Écrit le PDF là où le moteur d'Android peut le lire, et rend son chemin.
+  /// Écrit le PDF là où le moteur du système peut le lire, et rend son chemin.
   ///
   /// Le dossier est vidé à chaque ouverture : un aperçu interrompu par
   /// l'arrêt de l'application ne laisse rien en clair. Pas le dossier de

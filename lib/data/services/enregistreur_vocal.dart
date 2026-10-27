@@ -135,7 +135,7 @@ class EnregistreurVocal {
         '${dossier.path}/vocal_${DateTime.now().millisecondsSinceEpoch}.m4a';
     // La musique des autres applications se met en pause AVANT le premier son
     // capté, et reprend seule à la fin (voir « focusAudio » côté Android).
-    await _reglageAndroid('focusAudio', true);
+    await _reglage('focusAudio', true);
     try {
       await _enregistreur.start(
         RecordConfig(
@@ -208,7 +208,7 @@ class EnregistreurVocal {
         path: chemin,
       );
     } catch (_) {
-      await _reglageAndroid('focusAudio', false);
+      await _reglage('focusAudio', false);
       rethrow;
     }
     _chemin = chemin;
@@ -216,7 +216,7 @@ class EnregistreurVocal {
     _cycle = AppLifecycleListener(onHide: _suspendre, onShow: _reprendre);
     // La veille automatique de l'écran est le cas courant : on l'empêche le
     // temps de l'enregistrement, comme un lecteur vidéo.
-    unawaited(_reglageAndroid('garderEcranAllume', true));
+    unawaited(_reglage('garderEcranAllume', true));
     _amplitudes.clear();
     // Dix mesures par seconde : assez pour que la silhouette suive la voix,
     // assez peu pour qu'un message de deux minutes ne remplisse pas
@@ -300,16 +300,20 @@ class EnregistreurVocal {
   void _fermerCycle() {
     _cycle?.dispose();
     _cycle = null;
-    unawaited(_reglageAndroid('garderEcranAllume', false));
-    unawaited(_reglageAndroid('focusAudio', false));
+    unawaited(_reglage('garderEcranAllume', false));
+    unawaited(_reglage('focusAudio', false));
   }
 
-  /// Un réglage d'Android le temps du vocal (`garderEcranAllume`,
-  /// `focusAudio`), posé au départ et retiré à la fin. Android seul, où les
-  /// défauts ont été vus ; ailleurs, la pause au départ de l'écran suffit à ne
-  /// pas enregistrer de vide.
-  Future<void> _reglageAndroid(String methode, bool actif) async {
-    if (!estAndroid) return;
+  /// Un réglage du système le temps du vocal (`garderEcranAllume`,
+  /// `focusAudio`), posé au départ et retiré à la fin.
+  ///
+  /// `garderEcranAllume` vaut sur les deux téléphones : la veille de l'écran
+  /// met l'application en arrière-plan, ce qui suspend l'enregistrement en
+  /// plein message. `focusAudio` est propre à Android, où les défauts ont été
+  /// vus ; sur iPhone, la session audio de l'enregistrement interrompt la
+  /// musique d'elle-même. Ailleurs (navigateur), rien à régler.
+  Future<void> _reglage(String methode, bool actif) async {
+    if (!estAndroid && !(estIOS && methode == 'garderEcranAllume')) return;
     try {
       await _canal.invokeMethod<void>(methode, actif);
     } catch (e) {

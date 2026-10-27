@@ -60,3 +60,25 @@ class _MessagerRempartState extends ScaffoldMessengerState {
         clipBehavior: b.clipBehavior,
       );
 }
+
+/// [MessagerRempart], prêt à poser sous `CupertinoApp`.
+///
+/// En mode debug, `ScaffoldMessenger.of` vérifie qu'un ancêtre est de type
+/// **exactement** `ScaffoldMessenger` (`debugCheckHasScaffoldMessenger`), ce
+/// qu'une sous-classe ne satisfait pas. Sous `MaterialApp`, celui que pose
+/// l'application passe le contrôle ; `CupertinoApp` n'en pose aucun, et chaque
+/// bandeau levait « No ScaffoldMessenger widget found » sur iPhone (vu le
+/// 2026-10-27 sur « Modifier le profil »). La version de production, sans
+/// vérification, l'affichait quand même : seul le simulateur le montrait.
+///
+/// Un `ScaffoldMessenger` ordinaire au-dessus suffit : il passe le contrôle, et
+/// `ScaffoldMessenger.of` rend toujours le plus proche, donc celui-ci.
+class MessagerRempartCupertino extends StatelessWidget {
+  const MessagerRempartCupertino({required this.child, super.key});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) =>
+      ScaffoldMessenger(child: MessagerRempart(child: child));
+}
