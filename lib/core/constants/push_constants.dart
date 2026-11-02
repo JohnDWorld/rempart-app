@@ -1,5 +1,8 @@
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+
+import '../plateforme.dart';
 
 /// Mécanisme de notification retenu pour cette installation.
 enum ModePush {
@@ -77,15 +80,41 @@ abstract class PushConstants {
   /// `google-services.json` : la variante souveraine reste ainsi constructible
   /// sans le moindre fichier Google, et basculer d'un projet Firebase à un
   /// autre ne demande qu'un `.env`.
-  static FirebaseOptions? get optionsFirebase {
-    final apiKey = _lire('FCM_API_KEY');
-    final appId = _lire('FCM_APP_ID');
-    final senderId = _lire('FCM_SENDER_ID');
-    final projectId = _lire('FCM_PROJECT_ID');
+  static FirebaseOptions? get optionsFirebase =>
+      optionsFirebasePour(ios: estIOS, lire: _lire);
+
+  /// Les identifiants Firebase de la plateforme [ios] ou Android.
+  ///
+  /// Une application Firebase a un identifiant **par plateforme**
+  /// (`1:<projet>:android:<…>`, `1:<projet>:ios:<…>`), et sa clé d'API est
+  /// en général restreinte à elle. L'iPhone lit donc les siens,
+  /// `FCM_APP_ID_IOS` et `FCM_API_KEY_IOS`.
+  ///
+  /// Le garde-fou sur le format n'est pas de la prudence : un identifiant
+  /// d'une autre plateforme fait lever à Firebase une exception Objective-C
+  /// (`FIRApp configureWithName`), que le `try` de Dart ne voit jamais, et
+  /// l'application se ferme. C'est ce qui arrivait sur iPhone avec le `.env`
+  /// de production, qui ne porte que l'identifiant Android : plantage à
+  /// chaque lancement (vu le 2026-10-27). Mieux vaut un iPhone sans
+  /// notifications FCM qu'une application qui ne s'ouvre pas.
+  @visibleForTesting
+  static FirebaseOptions? optionsFirebasePour({
+    required bool ios,
+    required String? Function(String cle) lire,
+  }) {
+    final apiKey = lire(ios ? 'FCM_API_KEY_IOS' : 'FCM_API_KEY');
+    final appId = lire(ios ? 'FCM_APP_ID_IOS' : 'FCM_APP_ID');
+    final senderId = lire('FCM_SENDER_ID');
+    final projectId = lire('FCM_PROJECT_ID');
     if (apiKey == null ||
         appId == null ||
         senderId == null ||
         projectId == null) {
+      return null;
+    }
+    if (!appId.contains(ios ? ':ios:' : ':android:')) {
+      debugPrint('Push: identifiant Firebase $appId refusé, il ne vise pas '
+          '${ios ? 'iOS' : 'Android'}');
       return null;
     }
     return FirebaseOptions(
