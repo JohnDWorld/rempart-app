@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:matrix/matrix.dart' as matrix;
 
 import '../../../app/theme.dart';
+import '../../../data/models/models.dart';
 
 /// Petit cadenas indiquant l'état de chiffrement d'une room.
 ///
@@ -15,6 +16,16 @@ class EncryptionBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Le canal officiel n'est pas chiffré et ne le prétend pas : ni cadenas
+    // fermé, ni cadenas ouvert qui sonnerait comme une alerte.
+    if (room.estCanalOfficiel) {
+      return Icon(
+        Icons.verified_outlined,
+        size: size,
+        color: Theme.of(context).colorScheme.primary,
+        semanticLabel: 'Canal officiel de Rempart',
+      );
+    }
     final encrypted = room.encrypted;
     return Icon(
       encrypted ? Icons.lock : Icons.lock_open,
@@ -41,6 +52,7 @@ class EncryptionBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final officiel = room.estCanalOfficiel;
     final encrypted = room.encrypted;
     final theme = Theme.of(context);
     final color = encrypted
@@ -63,16 +75,22 @@ class EncryptionBanner extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
-            encrypted ? Icons.lock : Icons.lock_open,
+            officiel
+                ? Icons.verified_outlined
+                : encrypted
+                    ? Icons.lock
+                    : Icons.lock_open,
             size: 14,
             color: color,
           ),
           const SizedBox(width: 6),
           Flexible(
             child: Text(
-              encrypted
-                  ? 'Messages chiffrés de bout en bout'
-                  : 'Non chiffré · lisible par le serveur Rempart',
+              officiel
+                  ? 'Canal officiel de Rempart'
+                  : encrypted
+                      ? 'Messages chiffrés de bout en bout'
+                      : 'Non chiffré · lisible par le serveur Rempart',
               style: theme.textTheme.bodySmall?.copyWith(color: color),
               textAlign: TextAlign.center,
             ),

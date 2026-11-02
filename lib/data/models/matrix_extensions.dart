@@ -12,6 +12,18 @@ String? _extractLocalpart(String matrixId) {
 }
 
 extension RoomHelpers on Room {
+  /// Canal officiel de Rempart : le salon d'annonces de Synapse (« server
+  /// notices »), une pièce par personne, étiquetée `m.server_notice`. Non
+  /// chiffré, lecture seule. Seul point de vérité : toute règle propre à ce
+  /// salon passe par ici.
+  bool get estCanalOfficiel => tags.containsKey(TagType.serverNotice);
+
+  /// Faux dans un salon en lecture seule. Le droit seul, et non
+  /// `canSendDefaultMessages`, faux aussi quand le chiffrement n'a pas démarré :
+  /// une panne doit se dire à l'envoi, pas se présenter comme un manque de droits.
+  bool get peutEcrire =>
+      canSendEvent(encrypted ? EventTypes.Encrypted : EventTypes.Message);
+
   /// Heure du dernier accusé de lecture de chaque autre membre (mxid → heure).
   ///
   /// Le fil principal et le reste du salon portent chacun leurs accusés : on

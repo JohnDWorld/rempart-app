@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import 'package:matrix/matrix.dart' as matrix;
 
 import '../../../app/theme.dart';
+import '../../../core/utils/canal_officiel.dart';
+import '../../../data/models/models.dart';
 import '../../../data/providers/providers.dart';
 import '../../../data/services/partage_entrant.dart';
 import '../../widgets/adaptive/adaptive.dart';
@@ -45,7 +47,11 @@ class _PartagerScreenState extends ConsumerState<PartagerScreen> {
     final theme = Theme.of(context);
     final q = _recherche.trim().toLowerCase();
     final rooms = [
-      for (final room in ref.watch(sortedRoomsProvider))
+      for (final room in destinationsEnvoi<matrix.Room>(
+        ref.watch(sortedRoomsProvider),
+        estCanal: (r) => r.estCanalOfficiel,
+        peutEcrire: (r) => r.peutEcrire,
+      ))
         if (q.isEmpty || nomAffichable(ref, room).toLowerCase().contains(q))
           room,
     ];

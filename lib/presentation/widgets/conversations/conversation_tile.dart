@@ -112,6 +112,10 @@ class ConversationTile extends ConsumerWidget {
                                     overflow: TextOverflow.ellipsis,
                                   ),
                           ),
+                          if (room.estCanalOfficiel) ...[
+                            const SizedBox(width: RempartTokens.espaceS),
+                            const _PastilleOfficiel(),
+                          ],
                           if (room.lastMessageTime != null) ...[
                             const SizedBox(width: RempartTokens.espaceS),
                             Text(
@@ -297,6 +301,27 @@ class ConversationTile extends ConsumerWidget {
 }
 
 /// Compteur de messages non lus.
+/// « Officiel » : même dessin que la pastille « Rempart » de « Mes bots ».
+class _PastilleOfficiel extends StatelessWidget {
+  const _PastilleOfficiel();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: scheme.secondaryContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        'Officiel',
+        style: TextStyle(fontSize: 11, color: scheme.onSecondaryContainer),
+      ),
+    );
+  }
+}
+
 class _PastilleNonLus extends StatelessWidget {
   const _PastilleNonLus({required this.nombre});
 

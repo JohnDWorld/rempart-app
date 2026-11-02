@@ -764,16 +764,22 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen>
                                 }
                                 context.push('/chat/${room.id}');
                               },
+                              // Le canal officiel ne s'archive ni ne se supprime :
+                              // l'annonce suivante le ramènerait.
                               confirmArchive: () => _confirmArchiveConversation(
                                 context,
                                 nomAffichable(ref, room),
                               ),
-                              onArchive: () => _archiveConversation(room),
+                              onArchive: room.estCanalOfficiel
+                                  ? null
+                                  : () => _archiveConversation(room),
                               confirmDelete: () => _confirmDeleteConversation(
                                 context,
                                 room,
                               ),
-                              onDelete: () => _deleteConversation(room),
+                              onDelete: room.estCanalOfficiel
+                                  ? null
+                                  : () => _deleteConversation(room),
                             );
                           },
                         ),

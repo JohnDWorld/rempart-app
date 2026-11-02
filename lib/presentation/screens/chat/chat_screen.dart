@@ -1102,6 +1102,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     );
   }
 
+  /// Faux dans un salon en lecture seule (canal officiel) : ni saisie, ni
+  /// réponse, ni réaction.
+  bool get _peutEcrire =>
+      ref.read(roomProvider(widget.conversationId))?.peutEcrire ?? false;
+
   void _setReplyTo(matrix.Event event) {
     setState(() => _replyTo = event);
   }
@@ -1127,15 +1132,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       builder: (context) => CupertinoActionSheet(
         // Même rangée que sur Android : une validation demandée par un agent
         // doit se donner d'un appui, quelle que soit la plateforme.
-        message: event.redacted ? null : _rangeeReactions(event),
+        message:
+            event.redacted || !_peutEcrire ? null : _rangeeReactions(event),
         actions: [
-          CupertinoActionSheetAction(
-            onPressed: () {
-              Navigator.pop(context);
-              _setReplyTo(event);
-            },
-            child: const Text('Répondre'),
-          ),
+          if (_peutEcrire)
+            CupertinoActionSheetAction(
+              onPressed: () {
+                Navigator.pop(context);
+                _setReplyTo(event);
+              },
+              child: const Text('Répondre'),
+            ),
           CupertinoActionSheetAction(
             onPressed: () {
               Navigator.pop(context);
@@ -1200,14 +1207,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               },
               child: const Text('Signaler ce message'),
             ),
-            CupertinoActionSheetAction(
-              isDestructiveAction: true,
-              onPressed: () {
-                Navigator.pop(context);
-                _bloquer(event.senderId);
-              },
-              child: const Text('Bloquer cette personne'),
-            ),
+            // Le canal officiel ne se bloque pas : il se met en sourdine.
+            if (!event.room.estCanalOfficiel)
+              CupertinoActionSheetAction(
+                isDestructiveAction: true,
+                onPressed: () {
+                  Navigator.pop(context);
+                  _bloquer(event.senderId);
+                },
+                child: const Text('Bloquer cette personne'),
+              ),
           ],
         ],
         cancelButton: CupertinoActionSheetAction(
@@ -1336,15 +1345,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (!event.redacted) _rangeeReactions(event),
-              ListTile(
-                leading: const Icon(Icons.reply),
-                title: const Text('Répondre'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _setReplyTo(event);
-                },
-              ),
+              if (!event.redacted && _peutEcrire) _rangeeReactions(event),
+              if (_peutEcrire)
+                ListTile(
+                  leading: const Icon(Icons.reply),
+                  title: const Text('Répondre'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _setReplyTo(event);
+                  },
+                ),
               ListTile(
                 leading: const Icon(Icons.copy),
                 title: const Text('Copier'),
@@ -1434,21 +1444,23 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     _signalerMessage(event);
                   },
                 ),
-                ListTile(
-                  leading: Icon(
-                    Icons.block,
-                    color: Theme.of(context).colorScheme.error,
+                // Le canal officiel ne se bloque pas : il se met en sourdine.
+                if (!event.room.estCanalOfficiel)
+                  ListTile(
+                    leading: Icon(
+                      Icons.block,
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                    title: Text(
+                      'Bloquer cette personne',
+                      style:
+                          TextStyle(color: Theme.of(context).colorScheme.error),
+                    ),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _bloquer(event.senderId);
+                    },
                   ),
-                  title: Text(
-                    'Bloquer cette personne',
-                    style:
-                        TextStyle(color: Theme.of(context).colorScheme.error),
-                  ),
-                  onTap: () {
-                    Navigator.pop(context);
-                    _bloquer(event.senderId);
-                  },
-                ),
               ],
             ],
           ),
@@ -1903,7 +1915,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
                                     // Glisser vers la droite pour répondre, sauf en
                                     // recherche : on y consulte, on n'y écrit pas.
-                                    final bulle = _isSearching
+                                    final bulle = _isSearching || !_peutEcrire
                                         ? brute
                                         : GlisserPourRepondre(
                                             onRepondre: () =>
@@ -1936,7 +1948,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     if (_envoiPieceJointe) _buildBandeauEnvoi(),
 
                     // Barre de saisie (masquée en recherche : on consulte, on n'écrit pas)
-                    if (!_isSearching)
+                    if (!_isSearching && !room.peutEcrire)
+                      _MentionLectureSeule(room: room)
+                    else if (!_isSearching)
                       MessageInput(
                         onSend: _sendMessage,
                         commandes: _commandesDuBot(room),
@@ -2125,12 +2139,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                             ? 'Réactiver les notifications'
                             : 'Mettre en sourdine',
                       ),
-                      EntreeMenu(
-                        valeur: 'info',
-                        libelle: room.otherUserMxid != null
-                            ? 'Infos du contact'
-                            : 'Infos du groupe',
-                      ),
+                      // Le canal officiel n'a rien à modifier : ni membres, ni
+                      // nom, ni départ.
+                      if (!room.estCanalOfficiel)
+                        EntreeMenu(
+                          valeur: 'info',
+                          libelle: room.otherUserMxid != null
+                              ? 'Infos du contact'
+                              : 'Infos du groupe',
+                        ),
                     ],
                   ),
                 ),
@@ -2276,6 +2293,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   /// Fiche du contact pour un tête-à-tête, du groupe sinon.
   void _ouvrirFiche(matrix.Room room) {
+    if (room.estCanalOfficiel) return;
     final contactMxid = room.otherUserMxid;
     unawaited(
       context.push(
@@ -2837,6 +2855,33 @@ class _SeparateurDate extends StatelessWidget {
       return DateFormat.MMMMd('fr').format(date);
     }
     return DateFormat.yMMMMd('fr').format(date);
+  }
+}
+
+/// Remplace la barre de saisie d'un salon où l'on ne peut pas écrire.
+class _MentionLectureSeule extends StatelessWidget {
+  const _MentionLectureSeule({required this.room});
+
+  final matrix.Room room;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.all(RempartTokens.espaceL),
+        child: Text(
+          room.estCanalOfficiel
+              ? 'Seul Rempart publie ici'
+              : 'Vous ne pouvez pas écrire dans cette conversation',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ),
+    );
   }
 }
 
