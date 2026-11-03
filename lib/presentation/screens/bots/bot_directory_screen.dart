@@ -121,7 +121,7 @@ class _BotDirectoryScreenState extends ConsumerState<BotDirectoryScreen> {
     try {
       final matrixService = ref.read(matrixServiceProvider);
       // Chiffré si ce bot tient ses propres clés, en clair sinon : même
-      // règle que le catalogue.
+      // règle que « Mes bots ».
       final roomId = await matrixService.createDirectChat(
         bot.mxid,
         encrypted: await matrixService.saitDechiffrer(bot.mxid),

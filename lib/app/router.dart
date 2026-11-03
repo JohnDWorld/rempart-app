@@ -12,7 +12,6 @@ import '../presentation/screens/auth/register_screen.dart';
 import '../presentation/screens/auth/reinitialiser_mot_de_passe_screen.dart';
 import '../presentation/screens/bots/bot_directory_screen.dart';
 import '../presentation/screens/bots/bots_hub_screen.dart';
-import '../presentation/screens/bots/bots_screen.dart';
 import '../presentation/screens/bots/boutique_agents_screen.dart';
 import '../presentation/screens/bots/my_bots_screen.dart';
 import '../presentation/screens/chat/chat_screen.dart';
@@ -235,13 +234,6 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/presentation',
         name: 'presentation',
         builder: (context, state) => const PresentationScreen(),
-      ),
-
-      // Catalogue des bots systeme
-      GoRoute(
-        path: '/bots/system',
-        name: 'system-bots',
-        builder: (context, state) => const BotsScreen(),
       ),
 
       // Mes bots (création/gestion, à la BotFather)

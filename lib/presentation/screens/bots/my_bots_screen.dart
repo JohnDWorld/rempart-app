@@ -197,7 +197,7 @@ class _MyBotsScreenState extends ConsumerState<MyBotsScreen> {
     try {
       // Chiffrée si ce bot tient ses propres clés. Un bot piloté par la
       // passerelle n'en a pas : son fil reste en clair, faute de quoi il ne
-      // lirait rien. Même règle que le catalogue.
+      // lirait rien. Même règle que l'annuaire.
       final matrixService = ref.read(matrixServiceProvider);
       final roomId = await matrixService.createDirectChat(
         bot.mxid,

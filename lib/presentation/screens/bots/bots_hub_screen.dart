@@ -3,12 +3,10 @@ import 'package:go_router/go_router.dart';
 
 import '../../widgets/adaptive/adaptive.dart';
 
-/// Choix entre ses propres bots et ceux fournis par Rempart.
+/// Entrée des bots : ses propres bots, ou un agent commandé à la Boutique.
 ///
-/// Les deux n'ont rien à voir : « Mes bots » sert à créer et configurer des
-/// comptes que l'on pilote soi-même, « Bots système » à démarrer une
-/// conversation avec l'assistant livré avec l'app. Les mêler sur un seul écran
-/// noyait la création de bot derrière un catalogue.
+/// Rempart ne livre aucun bot : le catalogue « Bots système » a été retiré le
+/// 2026-11-03, ses bots n'ayant jamais tourné en production.
 class BotsHubScreen extends StatelessWidget {
   const BotsHubScreen({super.key, this.decouverte = false});
 
@@ -74,13 +72,6 @@ class BotsHubScreen extends StatelessWidget {
               trailing: const Icon(Icons.chevron_right),
               onTap: () => context.push('/boutique-agents'),
             ),
-          ),
-          AdaptiveListTile(
-            leading: const CircleAvatar(child: Icon(Icons.support_agent)),
-            title: const Text('Bots système'),
-            subtitle: const Text('Assistant IA et bot de démonstration'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => context.push('/bots/system'),
           ),
         ],
       ),

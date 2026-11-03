@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../data/models/bot.dart';
 import '../../../data/models/profile.dart';
 import '../../../data/models/user_bot.dart';
 import '../../../data/providers/providers.dart';
@@ -38,7 +37,7 @@ class _NewGroupScreenState extends ConsumerState<NewGroupScreen> {
   /// Bots choisis, indexés par mxid : nom affiché.
   final _botsChoisis = <String, String>{};
 
-  /// Bots de l'utilisateur, chargés une fois (le catalogue, lui, est en dur).
+  /// Bots de l'utilisateur, chargés une fois.
   Future<List<UserBot>>? _mesBots;
 
   @override
@@ -232,8 +231,7 @@ class _NewGroupScreenState extends ConsumerState<NewGroupScreen> {
     );
   }
 
-  /// Bots correspondant à la recherche : catalogue intégré, puis ceux de
-  /// l'utilisateur.
+  /// Bots de l'utilisateur correspondant à la recherche.
   ///
   /// Filtrés et non listés d'office : qui possède cinquante bots ne veut pas
   /// tous les dérouler avant d'atteindre ses contacts.
@@ -243,8 +241,6 @@ class _NewGroupScreenState extends ConsumerState<NewGroupScreen> {
     final q = _query.toLowerCase();
     if (q.isEmpty) return const [];
     return [
-      for (final bot in botCatalogue)
-        (mxid: bot.matrixId, nom: bot.name, detail: bot.description),
       for (final bot in mesBots)
         (
           mxid: bot.mxid,

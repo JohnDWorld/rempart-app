@@ -46,11 +46,7 @@ final botGatewayServiceProvider = Provider<BotGatewayService>((ref) {
 /// fonctionner, sans suggestion.
 final commandesDesBotsProvider =
     FutureProvider<Map<String, List<BotCommand>>>((ref) async {
-  // Le catalogue d'abord : il est en dur, donc disponible même sans réseau.
-  final parMxid = <String, List<BotCommand>>{
-    for (final bot in botCatalogue)
-      if (bot.commandes.isNotEmpty) bot.matrixId: bot.commandes,
-  };
+  final parMxid = <String, List<BotCommand>>{};
 
   try {
     final liste = await ref.watch(botGatewayServiceProvider).myBots();
@@ -64,8 +60,8 @@ final commandesDesBotsProvider =
           bot.commands.isEmpty ? _commandesParDefaut : bot.commands;
     }
   } catch (e) {
-    // Passerelle injoignable : le catalogue reste, le reste attendra. Mieux
-    // vaut un menu partiel qu'un menu faux.
+    // Passerelle injoignable : pas de menu, la saisie reste possible. Mieux
+    // vaut pas de menu qu'un menu faux.
     debugPrint('commandes des bots indisponibles ($e)');
   }
   return parMxid;

@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../data/models/bot.dart';
 import '../../../data/models/profile.dart';
 import '../../../data/models/user_bot.dart';
 import '../../../data/providers/providers.dart';
@@ -221,8 +220,6 @@ class _AddMembersScreenState extends ConsumerState<AddMembersScreen> {
           // injoignable ».
 
           final proposes = <({String mxid, String nom, String detail})>[
-            for (final bot in botCatalogue)
-              (mxid: bot.matrixId, nom: bot.name, detail: bot.description),
             for (final bot in snapshot.data ?? const <UserBot>[])
               (
                 mxid: bot.mxid,
@@ -244,12 +241,11 @@ class _AddMembersScreenState extends ConsumerState<AddMembersScreen> {
               // injoignable (Tailscale coupé, réseau mobile) faisait
               // simplement disparaître les bots de l'utilisateur, ce qui se
               // lit comme « impossible d'ajouter mon bot » au lieu de
-              // « serveur injoignable ». Le catalogue, lui, reste proposé.
+              // « serveur injoignable ».
               if (snapshot.hasError)
                 _message(
                   'Vos bots ne sont pas joignables',
-                  'Le serveur des bots ne répond pas ; seuls les bots intégrés '
-                      'sont proposés.\n${snapshot.error}',
+                  'Le serveur des bots ne répond pas.\n${snapshot.error}',
                 ),
               for (final bot in proposes)
                 AdaptiveListTile(
