@@ -18,6 +18,7 @@ import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../app/theme.dart';
+import '../../../core/fichiers_entrants.dart';
 import '../../../core/mouvement.dart';
 import '../../../core/plateforme.dart';
 import '../../../core/telechargement.dart';
@@ -121,6 +122,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   /// Où en est un envoi groupé, pour le bandeau ; null pour un seul média.
   String? _etapeEnvoi;
 
+  /// Fichiers collés ou déposés dans le navigateur ; sans effet ailleurs.
+  late final void Function() _arreterFichiersEntrants;
+
+  /// Des fichiers glissés survolent la page : le voile « Déposer » s'affiche.
+  bool _survolDepot = false;
+  Timer? _finSurvol;
+
   late final AppLifecycleListener _retour;
 
   /// Retour à l'écran : ce qui est arrivé entre-temps est maintenant lu, et
@@ -142,6 +150,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     NotificationService.instance.roomOuverte = widget.conversationId;
     _itemPositionsListener.itemPositions.addListener(_surDefilement);
     _initTimeline();
+    _arreterFichiersEntrants = ecouterFichiersEntrants(
+      surFichiers: (lecture) => unawaited(_accueillirFichiersEntrants(lecture)),
+      surSurvol: _surSurvolDepot,
+    );
     if (widget.partage case final partage?) {
       WidgetsBinding.instance
           .addPostFrameCallback((_) => _accueillirPartage(partage));
@@ -158,6 +170,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     unawaited(LecteurVocal.instance.arreter());
     _itemPositionsListener.itemPositions.removeListener(_surDefilement);
     _retour.dispose();
+    _arreterFichiersEntrants();
+    _finSurvol?.cancel();
     _highlightTimer?.cancel();
     _searchController.dispose();
     _timeline?.cancelSubscriptions();
@@ -531,6 +545,53 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       await _proposerEnvoi(fichiers, legende: partage.texte);
     } catch (e) {
       _signaler('Impossible de joindre le fichier : $e');
+    }
+  }
+
+  /// Collé ou déposé, seulement quand la conversation est devant soi : ni
+  /// écran ni feuille par-dessus (dont l'aperçu d'envoi lui-même), ni
+  /// recherche, ni salon en lecture seule, ni envoi en cours.
+  bool get _accepteFichiersEntrants =>
+      mounted &&
+      (ModalRoute.of(context)?.isCurrent ?? true) &&
+      !_isSearching &&
+      !_envoiPieceJointe &&
+      _peutEcrire;
+
+  /// Fichiers collés (Ctrl+V) ou déposés dans le navigateur : même aperçu,
+  /// même envoi qu'une pièce jointe choisie ici.
+  Future<void> _accueillirFichiersEntrants(
+    Future<List<FichierEntrant>> lecture,
+  ) async {
+    if (!_accepteFichiersEntrants) return;
+    try {
+      final fichiers = await lecture;
+      if (fichiers.isEmpty || !mounted) return;
+      await _proposerEnvoi([
+        for (final fichier in fichiers)
+          matrix.MatrixFile.fromMimeType(
+            bytes: fichier.octets,
+            name: fichier.nom,
+            mimeType: fichier.mime,
+          ),
+      ]);
+    } catch (e) {
+      _signaler('Impossible de joindre le fichier : $e');
+    }
+  }
+
+  void _surSurvolDepot({required bool actif}) {
+    _finSurvol?.cancel();
+    if (actif && _accepteFichiersEntrants) {
+      // Le navigateur répète le survol tant qu'il dure : son silence vaut fin,
+      // une sortie de fenêtre n'étant pas toujours signalée.
+      _finSurvol = Timer(
+        const Duration(milliseconds: 600),
+        () => _surSurvolDepot(actif: false),
+      );
+      if (!_survolDepot) setState(() => _survolDepot = true);
+    } else if (_survolDepot && mounted) {
+      setState(() => _survolDepot = false);
     }
   }
 
@@ -1970,6 +2031,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             ),
             _voileHaut(hautSecurite),
             _enteteFlottante(room, events, hautSecurite),
+            Positioned.fill(
+              child: IgnorePointer(
+                child: AnimatedOpacity(
+                  opacity: _survolDepot ? 1 : 0,
+                  duration: dureeAnimation(
+                    context,
+                    const Duration(milliseconds: 150),
+                  ),
+                  child: const _VoileDepot(),
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -2805,6 +2878,43 @@ class _FeuilleLegendeState extends State<_FeuilleLegende> {
 ///
 /// Sans lui, deux messages à trois semaines d'écart se suivent sans rien qui
 /// marque la coupure : seule l'heure change, et elle ne dit pas quel jour.
+/// Voile posé sur la conversation pendant qu'on y glisse des fichiers.
+class _VoileDepot extends StatelessWidget {
+  const _VoileDepot();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final couleurs = theme.colorScheme;
+    return ColoredBox(
+      color: couleurs.surface.withValues(alpha: 0.85),
+      child: Padding(
+        padding: const EdgeInsets.all(RempartTokens.espaceXl),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border.all(color: couleurs.primary, width: 2),
+            borderRadius: BorderRadius.circular(RempartTokens.rayonCarte),
+          ),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.file_download_outlined,
+                  size: 48,
+                  color: couleurs.primary,
+                ),
+                const SizedBox(height: RempartTokens.espaceM),
+                Text('Déposer pour envoyer', style: theme.textTheme.titleMedium),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _SeparateurDate extends StatelessWidget {
   const _SeparateurDate({required this.date});
 
