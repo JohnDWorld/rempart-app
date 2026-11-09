@@ -17,6 +17,7 @@ import '../../core/utils/reponse_bouton.dart';
 import '../models/matrix_extensions.dart';
 import 'analyse_video.dart';
 import 'client_rempart.dart';
+import 'compression_image.dart';
 import 'contenu_media.dart';
 import 'enregistrement_photos.dart';
 import 'notification_service.dart';
@@ -1464,7 +1465,8 @@ class MatrixService {
   /// Change l'avatar d'une room. `null` retire la photo.
   Future<void> changerAvatarRoom(String roomId, MatrixFile? fichier) async {
     final room = _client!.getRoomById(roomId);
-    if (room != null) await room.setAvatar(fichier);
+    if (room == null) return;
+    await room.setAvatar(fichier == null ? null : await _sansTraces(fichier));
   }
 
   /// Change le niveau de pouvoir d'un membre (100 = administrateur, 0 = membre).
@@ -1810,7 +1812,7 @@ class MatrixService {
   /// chiffre et téléverse la vignette avec la vidéo (`thumbnail_file`).
   Future<(MatrixFile, MatrixImageFile?)> _preparerMedia(MatrixFile file) async {
     if (file is! MatrixVideoFile || file.duration != null) {
-      return (await _avecDimensions(file), null);
+      return (await _avecDimensions(await _sansTraces(file)), null);
     }
     final analyse = await analyserVideo(file.bytes);
     if (analyse == null) return (file, null);
@@ -1835,6 +1837,23 @@ class MatrixService {
               height: dimensions?.$2,
             ),
     );
+  }
+
+  /// La photo sans sa position, son appareil ni son heure
+  /// (`CompressionImage.sansTraces`), HD comprise : le contact n'a pas à
+  /// savoir où elle a été prise. Le nom suit le type quand un HEIC devient
+  /// JPEG.
+  Future<MatrixFile> _sansTraces(MatrixFile file) async {
+    if (!file.mimeType.startsWith('image/')) return file;
+    final (octets, type) =
+        await CompressionImage.sansTraces(file.bytes, file.mimeType);
+    if (identical(octets, file.bytes)) return file;
+    final point = file.name.lastIndexOf('.');
+    final nom = type == file.mimeType
+        ? file.name
+        : '${point > 0 ? file.name.substring(0, point) : file.name}'
+            '.${type == 'image/png' ? 'png' : 'jpg'}';
+    return MatrixFile.fromMimeType(bytes: octets, name: nom, mimeType: type);
   }
 
   /// La photo, avec sa largeur et sa hauteur (`info.w`, `info.h`).

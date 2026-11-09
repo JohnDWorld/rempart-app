@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 
 import '../../core/plateforme.dart';
+import '../../core/utils/metadonnees_image.dart';
 
 /// Réduit une photo avant l'envoi, sauf demande contraire.
 ///
@@ -56,6 +57,51 @@ class CompressionImage {
       debugPrint('Compression: image gardée telle quelle ($e)');
       return octets;
     }
+  }
+
+  /// La photo sans ce qu'elle dit d'elle-même (`sansMetadonnees` : position,
+  /// appareil, heure), et son vrai type : une photo HEIC allégée est déjà un
+  /// JPEG, que son type annonçait encore comme HEIC.
+  ///
+  /// Un HEIC (celui des Samsung réglés ainsi) n'a pas de tri sans perte ici :
+  /// il devient un JPEG à pleine taille, qualité 95, que la version web et
+  /// les autres clients affichent de toute façon mieux. Le web n'a pas le
+  /// codec, son HEIC part tel quel.
+  static Future<(Uint8List, String)> sansTraces(
+    Uint8List octets,
+    String mimeType,
+  ) async {
+    final trie = sansMetadonnees(octets);
+    if (trie != null) {
+      return (trie, trie[0] == 0xFF ? 'image/jpeg' : 'image/png');
+    }
+    if (estWeb || !_estHeif(octets)) return (octets, mimeType);
+    try {
+      // ponytail: décode le HEIC entier en mémoire ; un 50 Mpx peut manquer
+      // de place sur un petit téléphone, et part alors tel quel.
+      final jpeg = await FlutterImageCompress.compressWithList(
+        octets,
+        // L'échelle ne descend jamais sous 1 : aucune réduction.
+        minWidth: 1 << 16,
+        minHeight: 1 << 16,
+        // Le défaut du paquet, écrit quand même : il décide de ce que vaut
+        // une photo HD, il ne doit pas changer à la faveur d'une mise à jour.
+        // ignore: avoid_redundant_argument_values
+        quality: 95,
+      );
+      return (sansMetadonnees(jpeg) ?? jpeg, 'image/jpeg');
+    } catch (e) {
+      debugPrint('Métadonnées: HEIC gardé tel quel ($e)');
+      return (octets, mimeType);
+    }
+  }
+
+  /// `ftyp` puis une marque HEIF (heic, heix, heif, mif1...).
+  static bool _estHeif(Uint8List o) {
+    if (o.length < 12) return false;
+    final boite = String.fromCharCodes(o, 4, 8);
+    final marque = String.fromCharCodes(o, 8, 12);
+    return boite == 'ftyp' && (marque.startsWith('he') || marque == 'mif1');
   }
 
   /// Ce que pèsera l'envoi, pour le dire avant de l'engager.

@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/constants/supabase_constants.dart';
 import '../models/profile.dart';
+import 'compression_image.dart';
 
 /// Un nom d'utilisateur refusé par la base ; [raison] vaut `pris` ou l'une
 /// des règles (`longueur`, `caracteres`, `reserve`).
@@ -118,13 +119,24 @@ class ProfileService {
     final userId = _client.auth.currentUser?.id;
     if (userId == null) throw Exception('Utilisateur non connecté');
 
-    final fileExt = imageFile.path.split('.').last;
+    // La photo de profil se voit de tous : elle part sans sa position, son
+    // appareil ni son heure (`CompressionImage.sansTraces`).
+    final extension = imageFile.path.split('.').last.toLowerCase();
+    final (octets, type) = await CompressionImage.sansTraces(
+      await imageFile.readAsBytes(),
+      'image/${extension == 'jpg' ? 'jpeg' : extension}',
+    );
+    final fileExt = switch (type) {
+      'image/jpeg' => 'jpg',
+      'image/png' => 'png',
+      _ => extension,
+    };
     final fileName = '$userId/avatar.$fileExt';
 
     // Upload l'image
-    await _client.storage.from(SupabaseConstants.avatarsBucket).upload(
-        fileName, imageFile,
-        fileOptions: const FileOptions(upsert: true));
+    await _client.storage.from(SupabaseConstants.avatarsBucket).uploadBinary(
+        fileName, octets,
+        fileOptions: FileOptions(upsert: true, contentType: type));
 
     // Récupérer l'URL publique. Le fichier garde le même nom d'une photo à
     // l'autre, donc sans ce suffixe l'URL ne changerait pas et les caches
