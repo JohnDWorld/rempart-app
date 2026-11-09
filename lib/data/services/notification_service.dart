@@ -117,6 +117,36 @@ class NotificationService {
   /// Appelé quand l'utilisateur touche une notification.
   void Function(String roomId)? onOuvrirRoom;
 
+  /// La conversation d'une notification qui a LANCÉ l'application. Le greffon
+  /// ne la passe pas à `onDidReceiveNotificationResponse` (sa documentation le
+  /// dit) : elle se lit au démarrage ([_lireLancement]) et attend l'accueil,
+  /// seul écran qui garantit une session, comme un partage. Sans cela, toucher
+  /// une notification application fermée n'ouvrait que l'accueil.
+  final conversationEnAttente = ValueNotifier<String?>(null);
+  bool _lancementLu = false;
+
+  /// Rend la conversation en attente, et l'oublie.
+  String? prendreConversation() {
+    final roomId = conversationEnAttente.value;
+    conversationEnAttente.value = null;
+    return roomId;
+  }
+
+  Future<void> _lireLancement() async {
+    if (_lancementLu || estWeb) return;
+    _lancementLu = true;
+    final details = await _plugin.getNotificationAppLaunchDetails();
+    final reponse = details?.notificationResponse;
+    final roomId = reponse?.payload;
+    if ((details?.didNotificationLaunchApp ?? false) &&
+        reponse?.notificationResponseType ==
+            NotificationResponseType.selectedNotification &&
+        roomId != null &&
+        roomId.isNotEmpty) {
+      conversationEnAttente.value = roomId;
+    }
+  }
+
   /// Prépare le plugin de notifications.
   ///
   /// [demanderAutorisation] doit rester faux hors interface : dans un isolate
@@ -187,6 +217,7 @@ class NotificationService {
   /// Branche les notifications sur un client Matrix connecté.
   Future<void> ecouter(matrix.Client client) async {
     await init();
+    await _lireLancement();
     // Les vocaux de notifications balayées : rien ne prévient l'application.
     unawaited(effacerVocaux(plusVieuxQue: const Duration(days: 1)));
     // Les boutons des notifications arrivent dans un isolate à part, qui les
@@ -330,7 +361,7 @@ class NotificationService {
       ),
       payload: roomId,
     );
-    await _resumer();
+    await _resumer(arrivee: roomId);
   }
 
   /// Un bouton de notification relayé par l'isolate d'arrière-plan : c'est le
@@ -400,7 +431,7 @@ class NotificationService {
       ),
       payload: roomId,
     );
-    await _resumer();
+    await _resumer(arrivee: roomId);
   }
 
   /// Retire une notification à laquelle on vient de répondre depuis le volet.
@@ -495,7 +526,10 @@ class NotificationService {
   /// ait été lue (vu le 2026-09-30 : ouvrir une conversation depuis sa
   /// notification faisait disparaître celle d'une autre). Avec une seule
   /// conversation, Android n'affiche de toute façon qu'elle, sans l'en-tête.
-  Future<void> _resumer({int? retiree}) async {
+  ///
+  /// [arrivee] est la conversation qui vient de notifier : c'est elle que le
+  /// résumé ouvre (voir [conversationDuResume]).
+  Future<void> _resumer({int? retiree, String? arrivee}) async {
     final android = _android;
     if (android == null) return;
     try {
@@ -508,6 +542,14 @@ class NotificationService {
         await _plugin.cancel(id: _idResume);
         return;
       }
+      final cible = conversationDuResume(
+        enAttente: [for (final n in conversations) n.payload].nonNulls.toList(),
+        arrivee: arrivee,
+        precedente: [
+          for (final n in actives)
+            if (n.id == _idResume) n.payload,
+        ].nonNulls.firstOrNull,
+      );
       final nombre = conversations.length == 1
           ? '1 conversation'
           : '${conversations.length} conversations';
@@ -523,6 +565,10 @@ class NotificationService {
             priority: Priority.high,
             groupKey: _groupe,
             setAsGroupSummary: true,
+            // Toucher le résumé ne le retire pas : Android retirerait avec lui
+            // toutes les conversations du groupe, non lues comprises. Celle
+            // qu'il ouvre s'efface d'elle-même (`roomOuverte`).
+            autoCancel: false,
             // Le résumé ne sonne pas : chaque conversation l'a déjà fait.
             groupAlertBehavior: GroupAlertBehavior.children,
             onlyAlertOnce: true,
@@ -536,11 +582,25 @@ class NotificationService {
             ),
           ),
         ),
+        payload: cible,
       );
     } catch (e) {
       debugPrint('NotificationService: résumé non mis à jour ($e)');
     }
   }
+
+  /// La conversation qu'ouvre le résumé du groupe : celle qui vient
+  /// d'arriver, sinon celle qu'il ouvrait déjà si elle attend encore, sinon
+  /// la première qui attend. Sans elle, toucher le paquet replié
+  /// (« Rempart · 3 conversations ») n'ouvrait que l'accueil.
+  @visibleForTesting
+  static String? conversationDuResume({
+    required List<String> enAttente,
+    String? arrivee,
+    String? precedente,
+  }) =>
+      arrivee ??
+      (enAttente.contains(precedente) ? precedente : enAttente.firstOrNull);
 
   /// Avis sans expéditeur ni texte, affiché quand on n'a rien à dire (réveil
   /// par push) ou quand l'utilisateur ne veut rien voir (réglage).
@@ -561,7 +621,7 @@ class NotificationService {
       ),
       payload: roomId,
     );
-    await _resumer();
+    await _resumer(arrivee: roomId);
   }
 
   /// L'utilisateur accepte-t-il de voir ses messages dans les notifications ?

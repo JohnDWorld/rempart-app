@@ -11,6 +11,7 @@ import '../../core/mouvement.dart';
 import '../../core/plateforme.dart';
 import '../../data/providers/providers.dart';
 import '../../data/services/lien_contact_entrant.dart';
+import '../../data/services/notification_service.dart';
 import '../../data/services/partage_entrant.dart';
 import '../../data/services/presentation.dart';
 import '../../data/services/update_service.dart';
@@ -63,9 +64,13 @@ class _AccueilScreenState extends State<AccueilScreen>
     PartageEntrant.instance.enAttente.addListener(_ouvrirPartage);
     // Un lien de contact attend de même : c'est ici qu'une session est sûre.
     LienContactEntrant.instance.enAttente.addListener(_ouvrirContact);
+    // Et la conversation d'une notification qui a lancé l'application.
+    NotificationService.instance.conversationEnAttente
+        .addListener(_ouvrirConversation);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _ouvrirPartage();
       _ouvrirContact();
+      _ouvrirConversation();
     });
   }
 
@@ -74,7 +79,15 @@ class _AccueilScreenState extends State<AccueilScreen>
     WidgetsBinding.instance.removeObserver(this);
     PartageEntrant.instance.enAttente.removeListener(_ouvrirPartage);
     LienContactEntrant.instance.enAttente.removeListener(_ouvrirContact);
+    NotificationService.instance.conversationEnAttente
+        .removeListener(_ouvrirConversation);
     super.dispose();
+  }
+
+  void _ouvrirConversation() {
+    if (!mounted) return;
+    final roomId = NotificationService.instance.prendreConversation();
+    if (roomId != null) unawaited(GoRouter.of(context).push('/chat/$roomId'));
   }
 
   // ponytail: un second partage arrivé pendant le choix empile un second
