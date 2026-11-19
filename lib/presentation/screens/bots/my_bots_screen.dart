@@ -4,10 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/bot_gateway_constants.dart';
-import '../../../data/models/bot.dart';
 import '../../../data/models/user_bot.dart';
 import '../../../data/providers/providers.dart';
 import '../../widgets/adaptive/adaptive.dart';
+import '../../widgets/bots/configuration_bot.dart';
 
 /// Écran "Mes bots" : créer et gérer ses propres bots (à la BotFather).
 ///
@@ -42,7 +42,7 @@ class _MyBotsScreenState extends ConsumerState<MyBotsScreen> {
     // liste, calculée une fois : sans ceci, un bot créé ou des commandes
     // changées ici n'y apparaissaient qu'au redémarrage de l'application
     // (vu le 2026-10-05 sur Tyrion, créé avec ses commandes, sans bouton).
-    ref.invalidate(commandesDesBotsProvider);
+    ref.invalidate(mesBotsProvider);
     setState(() {
       _botsFuture = _load();
     });
@@ -131,25 +131,14 @@ class _MyBotsScreenState extends ConsumerState<MyBotsScreen> {
   }
 
   Future<void> _configureBot(UserBot bot) async {
-    final result = await showAdaptiveDialog<_BotConfigResult>(
-      context: context,
-      builder: (context) => _BotConfigDialog(bot: bot),
-    );
-    if (result == null) {
-      return;
-    }
-    setState(() => _busy = true);
     try {
-      final service = ref.read(botGatewayServiceProvider);
-      await service.setBotConfig(
-        bot.botId,
-        name: result.name,
-        description: result.description,
-        commands: result.commands,
+      final enregistre = await configurerBot(
+        context,
+        ref,
+        bot,
+        auDebutEnregistrement: () => setState(() => _busy = true),
       );
-      if (result.avatarUrl.isNotEmpty) {
-        await service.setBotAvatar(bot.botId, result.avatarUrl);
-      }
+      if (!enregistre) return;
       _snack('Configuration enregistrée.');
       _refresh();
     } catch (e) {
@@ -789,158 +778,6 @@ class _ErrorView extends StatelessWidget {
           child:
               FilledButton(onPressed: onRetry, child: const Text('Réessayer')),
         ),
-      ],
-    );
-  }
-}
-
-/// Résultat de l'édition de config d'un bot.
-class _BotConfigResult {
-  const _BotConfigResult({
-    required this.name,
-    required this.description,
-    required this.commands,
-    required this.avatarUrl,
-  });
-
-  final String name;
-  final String description;
-  final List<BotCommand> commands;
-  final String avatarUrl;
-}
-
-/// Dialogue d'édition de la config riche d'un bot : nom, description,
-/// commandes déclarées (une par ligne, `commande - description`) et avatar
-/// (URL d'image, publiée côté serveur sur le compte Matrix du bot).
-class _BotConfigDialog extends StatefulWidget {
-  const _BotConfigDialog({required this.bot});
-
-  final UserBot bot;
-
-  @override
-  State<_BotConfigDialog> createState() => _BotConfigDialogState();
-}
-
-class _BotConfigDialogState extends State<_BotConfigDialog> {
-  late final TextEditingController _name;
-  late final TextEditingController _description;
-  late final TextEditingController _commands;
-  late final TextEditingController _avatar;
-
-  @override
-  void initState() {
-    super.initState();
-    _name = TextEditingController(text: widget.bot.name);
-    _description = TextEditingController(text: widget.bot.description);
-    _commands = TextEditingController(
-      text: widget.bot.commands
-          .map(
-            (c) => c.description.isEmpty
-                ? c.commande
-                : '${c.commande} - ${c.description}',
-          )
-          .join('\n'),
-    );
-    _avatar = TextEditingController();
-  }
-
-  @override
-  void dispose() {
-    _name.dispose();
-    _description.dispose();
-    _commands.dispose();
-    _avatar.dispose();
-    super.dispose();
-  }
-
-  List<BotCommand> _parseCommands(String text) {
-    final out = <BotCommand>[];
-    for (final raw in text.split('\n')) {
-      final line = raw.trim();
-      if (line.isEmpty) {
-        continue;
-      }
-      final idx = line.indexOf(' - ');
-      if (idx >= 0) {
-        out.add(
-          BotCommand(
-            line.substring(0, idx).trim(),
-            line.substring(idx + 3).trim(),
-          ),
-        );
-      } else {
-        out.add(BotCommand(line, ''));
-      }
-    }
-    return out;
-  }
-
-  void _save() {
-    Navigator.pop(
-      context,
-      _BotConfigResult(
-        name: _name.text.trim(),
-        description: _description.text.trim(),
-        commands: _parseCommands(_commands.text),
-        avatarUrl: _avatar.text.trim(),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return DialogueAdaptatif(
-      title: const Text('Configurer le bot'),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: _name,
-              decoration: const InputDecoration(labelText: 'Nom'),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _description,
-              minLines: 2,
-              maxLines: 4,
-              decoration: const InputDecoration(
-                labelText: 'Description',
-                alignLabelWithHint: true,
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _commands,
-              minLines: 3,
-              maxLines: 8,
-              decoration: const InputDecoration(
-                labelText: 'Commandes',
-                hintText: "/meteo - météo du jour\n/aide - obtenir de l'aide",
-                alignLabelWithHint: true,
-                helperText: 'Une par ligne : commande - description',
-                helperMaxLines: 3,
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _avatar,
-              decoration: const InputDecoration(
-                labelText: "Avatar (URL d'image)",
-                hintText: 'https://...',
-                helperText: 'Laisser vide pour ne pas changer',
-                helperMaxLines: 3,
-              ),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        ActionDialogue(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Annuler'),
-        ),
-        ActionDialogue(principale: true, onPressed: _save, child: const Text('Enregistrer')),
       ],
     );
   }

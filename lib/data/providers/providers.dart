@@ -12,6 +12,7 @@ import '../../core/utils/nom_utilisateur.dart';
 import '../models/bot.dart';
 import '../models/matrix_extensions.dart';
 import '../models/profile.dart';
+import '../models/user_bot.dart';
 import '../services/archive_service.dart';
 import '../services/bot_gateway_service.dart';
 import '../services/matrix_service.dart';
@@ -36,35 +37,39 @@ final botGatewayServiceProvider = Provider<BotGatewayService>((ref) {
   return BotGatewayService();
 });
 
+/// Les bots de l'utilisateur (« Mes bots »), indexes par mxid.
+///
+/// Charges une fois, puis relus a chaque modification (creation,
+/// configuration, suppression), depuis « Mes bots » comme depuis une
+/// conversation. Un echec (gateway injoignable) rend une table vide : ni menu
+/// de commandes ni « Configurer le bot », la conversation reste utilisable.
+/// Mieux vaut pas de menu qu'un menu faux.
+final mesBotsProvider = FutureProvider<Map<String, UserBot>>((ref) async {
+  try {
+    final liste = await ref.watch(botGatewayServiceProvider).myBots();
+    return {for (final bot in liste.bots) bot.mxid: bot};
+  } catch (e) {
+    debugPrint('bots de l’utilisateur indisponibles ($e)');
+    return const {};
+  }
+});
+
 /// Commandes declarees par les bots de l'utilisateur, indexees par mxid.
 ///
 /// Sert a proposer la liste des le « / » dans une conversation avec un bot,
-/// comme le fait Telegram. Charge une fois, puis rechargee a chaque
-/// rechargement de « Mes bots » (creation, configuration, suppression) : une
-/// commande declaree ne change que lorsque son proprietaire l'edite. Un echec
-/// (gateway injoignable) rend une table vide - la saisie continue de
-/// fonctionner, sans suggestion.
+/// comme le fait Telegram.
 final commandesDesBotsProvider =
     FutureProvider<Map<String, List<BotCommand>>>((ref) async {
-  final parMxid = <String, List<BotCommand>>{};
-
-  try {
-    final liste = await ref.watch(botGatewayServiceProvider).myBots();
-    for (final bot in liste.bots) {
-      // Ce que le bot **déclare** fait foi : les agents Hermes annoncent déjà
-      // `/stop`, `/new`, `/steer` et les autres, et une commande qui change
-      // là-bas n'a pas à attendre une nouvelle version de l'application.
-      // Un bot qui ne déclare rien reçoit le minimum que tous comprennent,
-      // plutôt qu'un menu vide.
-      parMxid[bot.mxid] =
-          bot.commands.isEmpty ? _commandesParDefaut : bot.commands;
-    }
-  } catch (e) {
-    // Passerelle injoignable : pas de menu, la saisie reste possible. Mieux
-    // vaut pas de menu qu'un menu faux.
-    debugPrint('commandes des bots indisponibles ($e)');
-  }
-  return parMxid;
+  final bots = await ref.watch(mesBotsProvider.future);
+  return {
+    // Ce que le bot **déclare** fait foi : les agents Hermes annoncent déjà
+    // `/stop`, `/new`, `/steer` et les autres, et une commande qui change
+    // là-bas n'a pas à attendre une nouvelle version de l'application.
+    // Un bot qui ne déclare rien reçoit le minimum que tous comprennent,
+    // plutôt qu'un menu vide.
+    for (final bot in bots.values)
+      bot.mxid: bot.commands.isEmpty ? _commandesParDefaut : bot.commands,
+  };
 });
 
 /// Ce que comprend n'importe quel bot, faute de déclaration.

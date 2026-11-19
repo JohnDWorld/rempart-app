@@ -25,6 +25,7 @@ import '../../../core/telechargement.dart';
 import '../../../core/utils/groupe_album.dart';
 import '../../../data/models/bot.dart';
 import '../../../data/models/matrix_extensions.dart';
+import '../../../data/models/user_bot.dart';
 import '../../../data/providers/providers.dart';
 import '../../../data/services/compression_image.dart';
 import '../../../data/services/compression_video.dart';
@@ -36,6 +37,7 @@ import '../../../data/services/partage_entrant.dart';
 import '../../../data/services/reinitialisation_e2e.dart';
 import '../../../data/services/statut_presence.dart';
 import '../../widgets/adaptive/adaptive.dart';
+import '../../widgets/bots/configuration_bot.dart';
 import '../../widgets/chat/apercu_fichier.dart';
 import '../../widgets/chat/glisser_pour_repondre.dart';
 import '../../widgets/chat/informations_message.dart';
@@ -2117,6 +2119,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     double hautSecurite,
     ThemeData theme,
   ) {
+    final mxid = room.otherUserMxid;
+    final monBot =
+        mxid == null ? null : ref.watch(mesBotsProvider).value?[mxid];
     return Padding(
       padding: EdgeInsets.only(
         top: hautSecurite + RempartTokens.espaceS,
@@ -2203,6 +2208,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         unawaited(_basculerSourdine(room));
                       } else if (value == 'info') {
                         _ouvrirFiche(room);
+                      } else if (value == 'config' && monBot != null) {
+                        unawaited(_configurerBot(monBot));
                       }
                     },
                     entrees: [
@@ -2220,6 +2227,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                           libelle: room.otherUserMxid != null
                               ? 'Infos du contact'
                               : 'Infos du groupe',
+                        ),
+                      // Seul le propriétaire configure un bot : l'entrée ne
+                      // paraît que pour les siens (« Mes bots »).
+                      if (monBot != null)
+                        const EntreeMenu(
+                          valeur: 'config',
+                          libelle: 'Configurer le bot',
                         ),
                     ],
                   ),
@@ -2360,6 +2374,21 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Impossible de changer la sourdine : $e')),
+      );
+    }
+  }
+
+  /// Configuration du bot d'en face, la même que dans « Mes bots ».
+  Future<void> _configurerBot(UserBot bot) async {
+    try {
+      if (!await configurerBot(context, ref, bot) || !mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Configuration enregistrée')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Échec de la configuration : $e')),
       );
     }
   }
