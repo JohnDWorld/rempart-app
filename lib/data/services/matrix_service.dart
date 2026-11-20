@@ -16,6 +16,7 @@ import '../../core/utils/reactions.dart';
 import '../../core/utils/reponse_bouton.dart';
 import '../models/matrix_extensions.dart';
 import 'analyse_video.dart';
+import 'base_rempart.dart';
 import 'client_rempart.dart';
 import 'compression_image.dart';
 import 'contenu_media.dart';
@@ -82,14 +83,20 @@ class MatrixService {
     // Sur le web, ni sqflite ni chemin de fichier : le SDK bascule tout seul
     // sur IndexedDB quand on ne lui donne pas de base. Lui passer une base
     // SQLite ferait lever `path_provider` avant même l'ouverture.
-    final matrixDb = estWeb
-        ? await MatrixSdkDatabase.init(MatrixConstants.applicationName)
-        : await MatrixSdkDatabase.init(
-            MatrixConstants.applicationName,
-            database: await openDatabase(
-              '${await _getDatabasePath()}/${MatrixConstants.applicationName}.db',
-            ),
-          );
+    // Sur téléphone, `BaseRempart` tient en mémoire le cache d'envoi des
+    // médias, que le SDK garde déjà ainsi sur le web (voir sa documentation).
+    final MatrixSdkDatabase matrixDb;
+    if (estWeb) {
+      matrixDb = await MatrixSdkDatabase.init(MatrixConstants.applicationName);
+    } else {
+      matrixDb = BaseRempart(
+        MatrixConstants.applicationName,
+        database: await openDatabase(
+          '${await _getDatabasePath()}/${MatrixConstants.applicationName}.db',
+        ),
+      );
+      await matrixDb.open();
+    }
 
     // `ClientRempart` et non `Client` : il refuse d'écrire en clair dans un
     // salon chiffré quand vodozemac n'a pas démarré (voir sa documentation).
@@ -1695,17 +1702,19 @@ class MatrixService {
 
     final albumId = 'alb_${DateTime.now().microsecondsSinceEpoch}';
     final texte = legende?.trim() ?? '';
-    final contenus = <Map<String, dynamic>>[];
+    final contenus = <(String, Map<String, dynamic>)>[];
     Object? panne;
     for (final fichier in fichiers) {
       try {
         final (media, vignette) = await _preparerMedia(fichier);
-        contenus.add(
-          await _televerser(room, media, vignette, {
+        final txid = room.client.generateUniqueTransactionId();
+        contenus.add((
+          txid,
+          await _televerser(room, media, vignette, txid, {
             if (contenus.isEmpty && texte.isNotEmpty) 'body': texte,
             'fr.rempart.album': {'id': albumId},
           }),
-        );
+        ));
         auFil?.call(contenus.length);
       } catch (e) {
         panne = e;
@@ -1718,12 +1727,16 @@ class MatrixService {
     // échec et prêt à renvoyer (le SDK rend alors null).
     var envoyes = 0;
     final chrono = Stopwatch()..start();
-    for (final contenu in contenus) {
+    for (final (txid, contenu) in contenus) {
       try {
-        if (await room.sendEvent(contenu) != null) envoyes++;
+        if (await room.sendEvent(contenu, txid: txid) != null) envoyes++;
       } catch (e) {
         panne ??= e;
       }
+      // Comme `sendFileEvent`, le cache d'envoi s'efface une fois le
+      // message parti.
+      await room.client.database.deleteFile(_cacheEnvoi('file', txid));
+      await room.client.database.deleteFile(_cacheEnvoi('thumbnail', txid));
     }
     // L'écart entre le premier et le dernier message, celui que voit le
     // contact : il doit rester de l'ordre de la seconde.
@@ -1740,10 +1753,17 @@ class MatrixService {
   /// Chiffre et téléverse un média et sa vignette, puis rend le message qui
   /// l'annoncera, sans l'envoyer. Mêmes étapes que `Room.sendFileEvent`,
   /// vignette d'une photo comprise.
+  ///
+  /// Comme lui, garde le fichier en clair sous la transaction [txid] : c'est
+  /// ce qu'affiche l'écho du message tant qu'il part. Sans ce fichier, la
+  /// bulle qui le cherchait poussait le SDK à annuler l'envoi en vidant le
+  /// contenu, et la première photo d'un album est partie vide (le
+  /// 2026-11-19, voir `BaseRempart`).
   Future<Map<String, dynamic>> _televerser(
     Room room,
     MatrixFile fichier,
     MatrixImageFile? vignetteFournie,
+    String txid,
     Map<String, dynamic> extra,
   ) async {
     final client = room.client;
@@ -1773,6 +1793,16 @@ class MatrixService {
             client,
             vignetteChiffree?.toMatrixFile() ?? vignette,
           );
+    final maintenant = DateTime.now().millisecondsSinceEpoch;
+    await client.database
+        .storeFile(_cacheEnvoi('file', txid), fichier.bytes, maintenant);
+    if (vignette != null) {
+      await client.database.storeFile(
+        _cacheEnvoi('thumbnail', txid),
+        vignette.bytes,
+        maintenant,
+      );
+    }
     return contenuDuMedia(
       fichier: fichier,
       url: url,
@@ -1783,6 +1813,10 @@ class MatrixService {
       extra: extra,
     );
   }
+
+  /// Où le SDK cherche le fichier d'un envoi en cours (`Event._getCachedFile`).
+  static Uri _cacheEnvoi(String sorte, String txid) =>
+      Uri(scheme: 'cache', host: sorte, path: txid);
 
   /// Comme le SDK : un refus du serveur (trop volumineux) arrête tout, une
   /// coupure se retente chaque seconde, le temps d'un envoi de message.
