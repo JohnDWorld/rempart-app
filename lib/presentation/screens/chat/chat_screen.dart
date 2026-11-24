@@ -22,6 +22,7 @@ import '../../../core/fichiers_entrants.dart';
 import '../../../core/mouvement.dart';
 import '../../../core/plateforme.dart';
 import '../../../core/telechargement.dart';
+import '../../../core/utils/activite.dart';
 import '../../../core/utils/groupe_album.dart';
 import '../../../data/models/bot.dart';
 import '../../../data/models/matrix_extensions.dart';
@@ -40,6 +41,7 @@ import '../../widgets/adaptive/adaptive.dart';
 import '../../widgets/bots/configuration_bot.dart';
 import '../../widgets/chat/apercu_fichier.dart';
 import '../../widgets/chat/glisser_pour_repondre.dart';
+import '../../widgets/chat/indicateur_activite.dart';
 import '../../widgets/chat/informations_message.dart';
 import '../../widgets/chat/lecteur_video.dart';
 import '../../widgets/chat/message_bubble.dart';
@@ -2008,6 +2010,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                                 ),
                     ),
 
+                    if (!_isSearching) _indicateurActivite(room),
+
                     if (_envoiPieceJointe) _buildBandeauEnvoi(),
 
                     // Barre de saisie (masquée en recherche : on consulte, on n'écrit pas)
@@ -2021,6 +2025,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         onCancelReply: _cancelReply,
                         onAttachmentPressed: _choisirPieceJointe,
                         onTyping: _signalerSaisie,
+                        onEnregistrement: _signalerEnregistrement,
                         room: room,
                         onVocal: _envoyerVocal,
                         texteInitial: widget.partage?.fichiers.isEmpty ?? false
@@ -2493,12 +2498,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     required bool contactSupprime,
     required bool isIOS,
   }) {
-    final ecrivent =
-        ref.watch(typingUsersProvider(room.id)).value ?? const <String>[];
-
-    if (ecrivent.isNotEmpty) {
+    final activite = _activite(room);
+    if (activite != null) {
       return Text(
-        _libelleSaisie(room, ecrivent),
+        activite.libelle,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -2546,13 +2549,52 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         const <BotCommand>[];
   }
 
-  /// Dans un tête-à-tête, nommer l'autre serait redondant avec l'en-tête ;
-  /// dans un groupe, c'est au contraire l'information utile.
-  String _libelleSaisie(matrix.Room room, List<String> noms) {
-    if (room.otherUserMxid != null) return "en train d'écrire...";
-    if (noms.length == 1) return '${noms.first} écrit...';
-    if (noms.length == 2) return '${noms[0]} et ${noms[1]} écrivent...';
-    return 'plusieurs personnes écrivent...';
+  /// Ce que font les autres membres en ce moment, ou `null` : qui écrit ou
+  /// enregistre un vocal. L'enregistrement prime, c'est le plus parlant.
+  ({String libelle, bool enregistre})? _activite(matrix.Room room) {
+    final enregistrent =
+        ref.watch(enregistrentProvider(room.id)).value ?? const <String>[];
+    final ecrivent =
+        ref.watch(typingUsersProvider(room.id)).value ?? const <String>[];
+    final enregistre = enregistrent.isNotEmpty;
+    final ids = enregistre ? enregistrent : ecrivent;
+    if (ids.isEmpty) return null;
+
+    return (
+      enregistre: enregistre,
+      libelle: libelleActivite(
+        direct: room.otherUserMxid != null,
+        noms: [
+          for (final id in ids)
+            ref.watch(nomContactProvider(id)) ?? "Quelqu'un",
+        ],
+        enregistre: enregistre,
+      ),
+    );
+  }
+
+  /// Bulle animée sous le dernier message pendant que l'autre écrit ou
+  /// enregistre. Hors de la liste : un élément de plus y décalerait les
+  /// positions dont dépendent la recherche et le saut vers un message cité.
+  Widget _indicateurActivite(matrix.Room room) {
+    final activite = _activite(room);
+    if (activite == null) return const SizedBox.shrink();
+    return IndicateurActivite(
+      enregistre: activite.enregistre,
+      libelle: activite.libelle,
+    );
+  }
+
+  /// Relaie l'enregistrement d'un vocal aux autres membres.
+  void _signalerEnregistrement({required bool actif}) {
+    unawaited(
+      ref
+          .read(matrixServiceProvider)
+          .signalerEnregistrement(widget.conversationId, actif: actif)
+          .catchError((Object e) {
+        debugPrint('Chat: signal d’enregistrement non transmis ($e)');
+      }),
+    );
   }
 
   /// Relaie l'état de saisie à Matrix (événement éphémère `m.typing`).
@@ -2934,7 +2976,8 @@ class _VoileDepot extends StatelessWidget {
                   color: couleurs.primary,
                 ),
                 const SizedBox(height: RempartTokens.espaceM),
-                Text('Déposer pour envoyer', style: theme.textTheme.titleMedium),
+                Text('Déposer pour envoyer',
+                    style: theme.textTheme.titleMedium),
               ],
             ),
           ),

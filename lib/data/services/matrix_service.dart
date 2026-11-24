@@ -10,6 +10,7 @@ import 'package:vodozemac/vodozemac.dart' as vod;
 
 import '../../core/constants/matrix_constants.dart';
 import '../../core/plateforme.dart';
+import '../../core/utils/activite.dart';
 import '../../core/utils/demandes.dart';
 import '../../core/utils/dimensions_image.dart';
 import '../../core/utils/reactions.dart';
@@ -486,7 +487,6 @@ class MatrixService {
     }
   }
 
-
   // ============================================
   // Durcissement E2E (cross-signing + sauvegarde de clés)
   // ============================================
@@ -945,8 +945,7 @@ class MatrixService {
   /// le flux du client donnait `null` à ce moment-là, l'abonnement n'était
   /// jamais créé, et aucune demande n'arrivait jamais. Vu à l'essai, avec un
   /// autre client qui demandait dans le vide.
-  final _demandesVerification =
-      StreamController<KeyVerification>.broadcast();
+  final _demandesVerification = StreamController<KeyVerification>.broadcast();
 
   Stream<KeyVerification> get demandesDeVerification =>
       _demandesVerification.stream;
@@ -1337,7 +1336,8 @@ class MatrixService {
     for (final reaction
         in message.aggregatedEvents(timeline, RelationshipTypes.reaction)) {
       if (reaction.senderId != moi || reaction.redacted) continue;
-      final contenu = reaction.content.tryGetMap<String, Object?>('m.relates_to');
+      final contenu =
+          reaction.content.tryGetMap<String, Object?>('m.relates_to');
       if (contenu?['key'] == symbole) return reaction;
     }
     return null;
@@ -1355,7 +1355,8 @@ class MatrixService {
               (reaction) => (
                 expediteur: reaction.senderId,
                 symbole: reaction.content
-                    .tryGetMap<String, Object?>('m.relates_to')?['key'] as String?,
+                        .tryGetMap<String, Object?>('m.relates_to')?['key']
+                    as String?,
                 retiree: reaction.redacted,
               ),
             ),
@@ -1785,8 +1786,8 @@ class MatrixService {
     final chiffre = chiffrer ? await fichier.encrypt() : null;
     final vignetteChiffree =
         chiffrer && vignette != null ? await vignette.encrypt() : null;
-    final url =
-        await _televerserAvecReprise(client, chiffre?.toMatrixFile() ?? fichier);
+    final url = await _televerserAvecReprise(
+        client, chiffre?.toMatrixFile() ?? fichier);
     final urlVignette = vignette == null
         ? null
         : await _televerserAvecReprise(
@@ -1851,7 +1852,8 @@ class MatrixService {
     final analyse = await analyserVideo(file.bytes);
     if (analyse == null) return (file, null);
     final vignette = analyse.vignette;
-    final dimensions = vignette == null ? null : await dimensionsImage(vignette);
+    final dimensions =
+        vignette == null ? null : await dimensionsImage(vignette);
     return (
       MatrixVideoFile(
         bytes: file.bytes,
@@ -1979,6 +1981,37 @@ class MatrixService {
     if (room == null) return;
 
     await room.setTyping(isTyping, timeout: isTyping ? 30000 : null);
+  }
+
+  /// Dit aux autres membres qu'on enregistre (ou plus) un vocal.
+  ///
+  /// Matrix n'a pas d'équivalent de `m.typing` pour cela : le signal part
+  /// directement aux appareils des membres (`typeSignalEnregistrement`).
+  Future<void> signalerEnregistrement(
+    String roomId, {
+    required bool actif,
+  }) async {
+    final client = _client!;
+    final room = client.getRoomById(roomId);
+    if (room == null) return;
+
+    final destinataires = {
+      for (final membre in room.getParticipants()) membre.id,
+      // L'état des membres peut manquer : en tête-à-tête, le contact est
+      // connu autrement.
+      if (room.directChatMatrixID != null) room.directChatMatrixID!,
+    }..remove(client.userID);
+    if (destinataires.isEmpty) return;
+
+    await client.sendToDevicesOfUserIds(
+      destinataires,
+      typeSignalEnregistrement,
+      contenuSignalEnregistrement(
+        roomId,
+        actif: actif,
+        maintenant: DateTime.now(),
+      ),
+    );
   }
 
   // ============================================

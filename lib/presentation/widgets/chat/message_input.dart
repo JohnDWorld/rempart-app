@@ -8,6 +8,7 @@ import 'package:matrix/matrix.dart' as matrix;
 import '../../../app/theme.dart';
 import '../../../core/mouvement.dart';
 import '../../../core/plateforme.dart';
+import '../../../core/utils/activite.dart';
 import '../../../core/utils/continuer_liste.dart';
 import '../../../data/models/bot.dart';
 import '../../../data/models/matrix_extensions.dart';
@@ -24,6 +25,7 @@ class MessageInput extends StatefulWidget {
     this.onCancelReply,
     this.onAttachmentPressed,
     this.onTyping,
+    this.onEnregistrement,
     this.room,
     this.onVocal,
     this.enabled = true,
@@ -41,6 +43,9 @@ class MessageInput extends StatefulWidget {
 
   /// Signale que l'utilisateur est (ou n'est plus) en train d'écrire.
   final void Function({required bool actif})? onTyping;
+
+  /// Signale que l'utilisateur enregistre (ou n'enregistre plus) un vocal.
+  final void Function({required bool actif})? onEnregistrement;
 
   /// Room courante, pour proposer ses membres après un « @ ».
   final matrix.Room? room;
@@ -107,12 +112,16 @@ class _MessageInputState extends State<MessageInput> {
   Timer? _chrono;
   Duration _duree = Duration.zero;
 
+  /// Dernier signal « enregistre » envoyé, `null` hors enregistrement.
+  DateTime? _signalVocal;
+
   @override
   void dispose() {
     _chrono?.cancel();
     // L'écran disparaît pendant un enregistrement : le micro doit se relâcher,
     // sinon il reste pris par l'application (voyant allumé sur Android).
     if (_enregistre) unawaited(EnregistreurVocal.instance.annuler());
+    _signalerEnregistrement(actif: false);
     _finDeSaisie?.cancel();
     // Fermer le fil proprement : l'écran disparaît, l'autre ne doit pas rester
     // avec l'indicateur allumé.
@@ -406,20 +415,50 @@ class _MessageInputState extends State<MessageInput> {
       _enregistre = true;
       _duree = Duration.zero;
     });
+    _signalerSaisie(actif: false);
+    _signalerEnregistrement(actif: true);
     _chrono = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
       setState(() => _duree = EnregistreurVocal.instance.ecoule);
+      _signalerEnregistrement(actif: true);
     });
   }
 
   Future<void> _annulerEnregistrement() async {
     _chrono?.cancel();
+    _signalerEnregistrement(actif: false);
     await EnregistreurVocal.instance.annuler();
     if (mounted) setState(() => _enregistre = false);
   }
 
+  /// Tient les autres membres informés de l'enregistrement d'un vocal.
+  ///
+  /// Répété toutes les 15 s, le destinataire l'oubliant au bout de 30 s sans
+  /// nouvelles ; éteint dès qu'on envoie ou qu'on abandonne.
+  void _signalerEnregistrement({required bool actif}) {
+    final signaler = widget.onEnregistrement;
+    if (signaler == null) return;
+
+    if (!actif) {
+      if (_signalVocal == null) return;
+      _signalVocal = null;
+      signaler(actif: false);
+      return;
+    }
+
+    final maintenant = DateTime.now();
+    final dernier = _signalVocal;
+    if (dernier != null &&
+        maintenant.difference(dernier) < repetitionSignalEnregistrement) {
+      return;
+    }
+    _signalVocal = maintenant;
+    signaler(actif: true);
+  }
+
   Future<void> _terminerEnregistrement() async {
     _chrono?.cancel();
+    _signalerEnregistrement(actif: false);
     final vocal = await EnregistreurVocal.instance.arreter();
     if (!mounted) return;
     setState(() => _enregistre = false);

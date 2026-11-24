@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -8,6 +9,7 @@ import 'package:matrix/matrix.dart' as matrix;
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 
 import '../../core/constants/supabase_constants.dart';
+import '../../core/utils/activite.dart';
 import '../../core/utils/nom_utilisateur.dart';
 import '../models/bot.dart';
 import '../models/matrix_extensions.dart';
@@ -560,10 +562,13 @@ final syncTickProvider = StreamProvider<int>((ref) async* {
   }
 });
 
-/// Membres en train d'écrire dans une room, hors soi-même.
+/// Identifiants des membres en train d'écrire dans une room, hors soi-même.
 ///
 /// La saisie arrive par les événements éphémères du sync, qui ne passent pas
 /// par la timeline : ce provider s'adosse donc à `onSync` et non aux messages.
+/// Des identifiants et non des noms : `calcDisplayname` retombe sur le
+/// localpart quand l'état des membres manque, le nom passe donc par
+/// `nomContactProvider`.
 final typingUsersProvider =
     StreamProvider.family<List<String>, String>((ref, roomId) async* {
   final client = ref.watch(matrixClientProvider);
@@ -576,8 +581,8 @@ final typingUsersProvider =
     final room = client.getRoomById(roomId);
     if (room == null) return const [];
     return room.typingUsers
-        .where((u) => u.id != client.userID)
-        .map((u) => u.calcDisplayname())
+        .map((u) => u.id)
+        .where((id) => id != client.userID)
         .toList();
   }
 
@@ -585,6 +590,49 @@ final typingUsersProvider =
   await for (final _ in client.onSync.stream) {
     yield lire();
   }
+});
+
+/// Identifiants des membres en train d'enregistrer un vocal dans une room.
+///
+/// Le signal n'est écouté que conversation ouverte : en l'ouvrant pendant un
+/// enregistrement, l'indicateur paraît à la répétition suivante (15 s au
+/// plus). Chaque membre s'éteint seul faute de nouvelles.
+final enregistrentProvider =
+    StreamProvider.autoDispose.family<List<String>, String>((ref, roomId) {
+  final client = ref.watch(matrixClientProvider);
+  if (client == null) return Stream.value(const <String>[]);
+
+  final fins = <String, Timer>{};
+  final sortie = StreamController<List<String>>();
+  void publier() => sortie.add(fins.keys.toList());
+
+  final abonnement = client.onToDeviceEvent.stream.listen((e) {
+    final actif = etatSignalEnregistrement(
+      e,
+      roomId: roomId,
+      moi: client.userID,
+      maintenant: DateTime.now(),
+    );
+    if (actif == null) return;
+    fins.remove(e.sender)?.cancel();
+    if (actif) {
+      fins[e.sender] = Timer(vieSignalEnregistrement, () {
+        fins.remove(e.sender);
+        publier();
+      });
+    }
+    publier();
+  });
+  ref.onDispose(() {
+    abonnement.cancel();
+    for (final fin in fins.values) {
+      fin.cancel();
+    }
+    sortie.close();
+  });
+
+  publier();
+  return sortie.stream;
 });
 
 /// Ce contact est-il en ligne, en suivant les changements et non un instantané.
@@ -648,10 +696,6 @@ final replyToEventProvider = StateProvider<matrix.Event?>((ref) => null);
 /// State pour la recherche de contacts
 final contactSearchQueryProvider = StateProvider<String>((ref) => '');
 
-/// State pour l'indicateur "en train d'écrire"
-final isTypingProvider =
-    StateProvider.family<bool, String>((ref, roomId) => false);
-
 // ============================================
 // Matrix Connection State
 // ============================================
@@ -695,7 +739,6 @@ final matrixInitializedProvider = Provider<bool>((ref) {
   final matrixService = ref.watch(matrixServiceProvider);
   return matrixService.isInitialized;
 });
-
 
 // ===========================================================================
 // Inscription ouverte ou non : la reponse vient du SERVEUR
