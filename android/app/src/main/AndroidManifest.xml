@@ -201,5 +201,11 @@
             <action android:name="android.intent.action.VIEW"/>
             <data android:scheme="http"/>
         </intent>
+        <!-- Lire un message à voix haute : sans elle, la synthèse vocale du
+             système est invisible depuis Android 11, et la lecture reste
+             muette sans erreur. -->
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE"/>
+        </intent>
     </queries>
 </manifest>

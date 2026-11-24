@@ -17,6 +17,7 @@ import 'core/constants/supabase_constants.dart';
 import 'core/rapports_plantage.dart';
 import 'core/utils/erreur_de_lien.dart';
 import 'data/providers/contenu_notifications.dart';
+import 'data/providers/emoji_jaime.dart';
 import 'data/providers/mode_theme.dart';
 import 'data/providers/taille_texte.dart';
 import 'data/services/lien_contact_entrant.dart';
@@ -110,6 +111,7 @@ Future<void> _demarrer(List<String> args) async {
   // utilisateur qui n'en veut pas.
   final contenuNotifications = await chargerContenuNotifications();
   final tailleTexte = await chargerTailleTexte();
+  final emojiJaime = await chargerEmojiJaime();
   await StatutPresence.instance.charger();
   NotificationService.instance.afficherContenu = contenuNotifications;
 
@@ -120,6 +122,7 @@ Future<void> _demarrer(List<String> args) async {
         contenuNotificationsProvider
             .overrideWith((ref) => contenuNotifications),
         tailleTexteProvider.overrideWith((ref) => tailleTexte),
+        emojiJaimeProvider.overrideWith((ref) => emojiJaime),
       ],
       child: const RempartApp(),
     ),

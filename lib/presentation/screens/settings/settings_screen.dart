@@ -16,6 +16,7 @@ import '../../../data/services/notification_service.dart';
 import '../../../services/auth_service.dart';
 import '../../widgets/adaptive/adaptive.dart';
 import '../../widgets/common/user_avatar.dart';
+import '../../widgets/settings/emoji_jaime_tile.dart';
 import '../../widgets/settings/enregistrement_photos_tile.dart';
 import '../../widgets/settings/mise_a_jour.dart';
 import '../../widgets/settings/push_mode_tile.dart';
@@ -147,6 +148,10 @@ class SettingsScreen extends ConsumerWidget {
                 const Material(
                   color: Colors.transparent,
                   child: TailleTexteTile(),
+                ),
+                const Material(
+                  color: Colors.transparent,
+                  child: EmojiJaimeTile(),
                 ),
                 CupertinoListTile.notched(
                   leading: const Icon(CupertinoIcons.archivebox),
@@ -393,9 +398,9 @@ class SettingsScreen extends ConsumerWidget {
     );
 
     if ((confirmed ?? false) && context.mounted) {
-      final matrixService = ref.read(matrixServiceProvider);
-      await matrixService.logout();
-
+      // `signOut` ferme aussi la session Matrix, en rattrapant ses erreurs.
+      // Un premier appel ici, sans protection, rendait le bouton muet au
+      // moindre échec du réseau.
       final authService = ref.read(authServiceProvider);
       await authService.signOut();
 
@@ -444,7 +449,8 @@ class SettingsScreen extends ConsumerWidget {
       showDialog<void>(
         context: context,
         barrierDismissible: false,
-        builder: (context) => const Center(child: CircularProgressIndicator.adaptive()),
+        builder: (context) =>
+            const Center(child: CircularProgressIndicator.adaptive()),
       ),
     );
 
@@ -526,6 +532,7 @@ class SettingsScreen extends ConsumerWidget {
           // Section Conversations
           _buildSectionHeader(context, 'Conversations'),
           const TailleTexteTile(),
+          const EmojiJaimeTile(),
           ListTile(
             leading: const Icon(Icons.archive_outlined),
             title: const Text('Archives'),
@@ -734,9 +741,9 @@ class SettingsScreen extends ConsumerWidget {
     );
 
     if ((confirmed ?? false) && context.mounted) {
-      final matrixService = ref.read(matrixServiceProvider);
-      await matrixService.logout();
-
+      // `signOut` ferme aussi la session Matrix, en rattrapant ses erreurs.
+      // Un premier appel ici, sans protection, rendait le bouton muet au
+      // moindre échec du réseau.
       final authService = ref.read(authServiceProvider);
       await authService.signOut();
 

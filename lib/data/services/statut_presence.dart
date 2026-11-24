@@ -59,6 +59,14 @@ class StatutPresence {
   matrix.Client? _client;
   AppLifecycleListener? _ecoute;
 
+  /// La dernière présence envoyée au serveur, pour ne pas la renvoyer telle
+  /// quelle. Sur le web, chaque focus gagné ou perdu par la fenêtre change
+  /// l'état de l'application (`resumed` / `inactive`) sans changer la
+  /// présence : les envois identiques s'enchaînaient jusqu'au refus du
+  /// serveur (429, relevé le 2026-11-24). Sur téléphone, même chose à chaque
+  /// volet des notifications tiré.
+  matrix.PresenceType? _envoyee;
+
   /// Relit le choix enregistré. Appelé au démarrage, avant la première
   /// synchronisation.
   Future<void> charger() async {
@@ -77,6 +85,7 @@ class StatutPresence {
   /// Branche un client connecté.
   void brancher(matrix.Client client) {
     _client = client;
+    _envoyee = null;
     _ecoute ??= AppLifecycleListener(onStateChange: (_) => _appliquer());
     _appliquer();
   }
@@ -100,8 +109,12 @@ class StatutPresence {
     // n'annonce rien, et le serveur prend toute synchronisation pour une
     // présence en ligne. `setPresence` l'applique sans attendre la suivante.
     client.syncPresence = presence;
+    if (presence == _envoyee) return;
+    _envoyee = presence;
     unawaited(
       client.setPresence(client.userID!, presence).catchError((Object e) {
+        // Le prochain changement d'état la renverra.
+        _envoyee = null;
         debugPrint('StatutPresence : présence non envoyée ($e)');
       }),
     );

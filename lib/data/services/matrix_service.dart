@@ -11,6 +11,7 @@ import 'package:vodozemac/vodozemac.dart' as vod;
 import '../../core/constants/matrix_constants.dart';
 import '../../core/plateforme.dart';
 import '../../core/utils/activite.dart';
+import '../../core/utils/deconnexion.dart';
 import '../../core/utils/demandes.dart';
 import '../../core/utils/dimensions_image.dart';
 import '../../core/utils/reactions.dart';
@@ -1084,11 +1085,17 @@ class MatrixService {
     await _client?.reportEvent(roomId, eventId, reason: motif, score: -100);
   }
 
-  /// Déconnexion
+  /// Déconnexion, qui ne reste jamais suspendue (voir
+  /// [deconnecterSansSeBloquer]).
   Future<void> logout() async {
-    if (_client != null && _client!.isLogged()) {
-      await _client!.logout();
-    }
+    final client = _client;
+    if (client == null || !client.isLogged()) return;
+    await deconnecterSansSeBloquer(
+      deconnexionSdk: client.logout,
+      fermerSurLeServeur: () =>
+          client.request(RequestType.POST, '/client/v3/logout'),
+      effacerLocal: client.clear,
+    );
   }
 
   /// Dispose le service

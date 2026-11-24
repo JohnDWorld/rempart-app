@@ -27,11 +27,13 @@ import '../../../core/utils/groupe_album.dart';
 import '../../../data/models/bot.dart';
 import '../../../data/models/matrix_extensions.dart';
 import '../../../data/models/user_bot.dart';
+import '../../../data/providers/emoji_jaime.dart';
 import '../../../data/providers/providers.dart';
 import '../../../data/services/compression_image.dart';
 import '../../../data/services/compression_video.dart';
 import '../../../data/services/enregistreur_vocal.dart';
 import '../../../data/services/lecteur_vocal.dart';
+import '../../../data/services/lecture_voix.dart';
 import '../../../data/services/matrix_service.dart' show EnvoiInterrompu;
 import '../../../data/services/notification_service.dart';
 import '../../../data/services/partage_entrant.dart';
@@ -172,6 +174,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     // Le lecteur des vocaux vit hors des bulles : il continuerait sinon de
     // jouer une conversation qu'on a quittée.
     unawaited(LecteurVocal.instance.arreter());
+    unawaited(LectureVoix.instance.arreter());
     _itemPositionsListener.itemPositions.removeListener(_surDefilement);
     _retour.dispose();
     _arreterFichiersEntrants();
@@ -272,6 +275,29 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final timeline = _timeline;
     return (timeline == null ? event : event.getDisplayEvent(timeline))
         .plaintextBody;
+  }
+
+  /// Un message qui se lit à voix haute : du texte, pas un média dont le
+  /// corps serait le nom de fichier.
+  bool _lisibleAVoixHaute(matrix.Event event) =>
+      !event.redacted &&
+      const {
+        matrix.MessageTypes.Text,
+        matrix.MessageTypes.Notice,
+        matrix.MessageTypes.Emote,
+      }.contains(event.messageType) &&
+      _texteAffiche(event).trim().isNotEmpty;
+
+  bool _enLecture(matrix.Event event) =>
+      LectureVoix.instance.enCours.value == event.eventId;
+
+  void _basculerLecture(matrix.Event event) {
+    final lecture = LectureVoix.instance;
+    unawaited(
+      _enLecture(event)
+          ? lecture.arreter()
+          : lecture.lire(event.eventId, _texteAffiche(event)),
+    );
   }
 
   /// Ne garde que les messages contenant la recherche. On filtre sur
@@ -1223,6 +1249,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               },
               child: const Text('Sélectionner le texte'),
             ),
+          if (_lisibleAVoixHaute(event))
+            CupertinoActionSheetAction(
+              onPressed: () {
+                Navigator.pop(context);
+                _basculerLecture(event);
+              },
+              child: Text(
+                _enLecture(event) ? 'Arrêter la lecture' : 'Lire à voix haute',
+              ),
+            ),
           if (event.porteUnFichier) ...[
             CupertinoActionSheetAction(
               onPressed: () {
@@ -1438,6 +1474,23 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   onTap: () {
                     Navigator.pop(context);
                     ouvrirSelectionTexte(context, _texteAffiche(event));
+                  },
+                ),
+              if (_lisibleAVoixHaute(event))
+                ListTile(
+                  leading: Icon(
+                    _enLecture(event)
+                        ? Icons.stop_circle_outlined
+                        : Icons.volume_up_outlined,
+                  ),
+                  title: Text(
+                    _enLecture(event)
+                        ? 'Arrêter la lecture'
+                        : 'Lire à voix haute',
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _basculerLecture(event);
                   },
                 ),
               if (event.porteUnFichier) ...[
@@ -1942,6 +1995,23 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                                       isMine: isMine,
                                       onReagir: (symbole) =>
                                           _reagir(event, symbole),
+                                      reactionsPermises: _peutEcrire,
+                                      onLire: _lisibleAVoixHaute(event)
+                                          ? () => _basculerLecture(event)
+                                          : null,
+                                      onDoubleTap: !isMine &&
+                                              _peutEcrire &&
+                                              !_isSearching
+                                          // Bascule : sur un message déjà
+                                          // aimé, le double appui retire
+                                          // le j'aime.
+                                          ? () => unawaited(
+                                                _reagir(
+                                                  event,
+                                                  ref.read(emojiJaimeProvider),
+                                                ),
+                                              )
+                                          : null,
                                       onBouton: (texte, valeur) =>
                                           _repondreAuBouton(
                                         texte,

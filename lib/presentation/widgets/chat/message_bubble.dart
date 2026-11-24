@@ -12,12 +12,15 @@ import '../../../core/mouvement.dart';
 import '../../../core/utils/reactions.dart';
 import '../../../core/utils/secret_message.dart';
 import '../../../data/models/matrix_extensions.dart';
+import '../../../data/providers/emoji_jaime.dart';
 import '../../../data/providers/providers.dart';
 import '../../../data/providers/taille_texte.dart';
 import '../../../data/providers/vitesse_vocal.dart';
 import '../../../data/services/cache_medias.dart';
 import '../../../data/services/lecteur_vocal.dart';
+import '../../../data/services/lecture_voix.dart';
 import '../../../data/services/matrix_service.dart';
+import '../../../data/services/transcription_vocale.dart';
 import '../adaptive/adaptive.dart';
 import '../common/user_avatar.dart';
 import 'message_riche.dart';
@@ -34,6 +37,9 @@ class MessageBubble extends ConsumerWidget {
     this.onLongPress,
     this.onReplyTap,
     this.onReagir,
+    this.onLire,
+    this.onDoubleTap,
+    this.reactionsPermises = true,
     this.onBouton,
     this.album,
     this.onOuvrirImage,
@@ -50,6 +56,16 @@ class MessageBubble extends ConsumerWidget {
 
   /// Appui sur une réaction déjà posée : l'ajoute ou la retire.
   final void Function(String symbole)? onReagir;
+
+  /// Lit le message à voix haute, ou arrête la lecture : null si le message
+  /// n'a rien à lire (média).
+  final VoidCallback? onLire;
+
+  /// Double appui sur un message reçu : j'aime.
+  final VoidCallback? onDoubleTap;
+
+  /// Faux là où l'on ne peut pas écrire (canal officiel) : pas de pouces.
+  final bool reactionsPermises;
 
   /// Appui sur un bouton proposé par un bot : renvoie sa valeur.
   /// Reçoit le **libellé** du bouton et sa **valeur** : le premier s'affiche
@@ -115,234 +131,273 @@ class MessageBubble extends ConsumerWidget {
         horizontal: RempartTokens.espaceS,
         vertical: 3,
       ),
-      child: Row(
-        mainAxisAlignment:
-            isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.end,
+      // La rangée d'actions vit sous la rangée de la bulle, et non dans sa
+      // colonne : l'avatar, aligné sur le bas, serait descendu à sa hauteur
+      // au lieu de rester contre la bulle.
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // Avatar (pour les messages des autres)
-          if (!isMine && showAvatar)
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: _buildSenderAvatar(context),
-            )
-          else if (!isMine)
-            const SizedBox(width: 40),
+          Row(
+            mainAxisAlignment:
+                isMine ? MainAxisAlignment.end : MainAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              // Avatar (pour les messages des autres)
+              if (!isMine && showAvatar)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: _buildSenderAvatar(context),
+                )
+              else if (!isMine)
+                const SizedBox(width: 40),
 
-          // Bulle de message, et sous elle ses réactions
-          Flexible(
-            child: Column(
-              crossAxisAlignment:
-                  isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-          GestureDetector(
-              onTap: onTap,
-              onLongPress: onLongPress,
-              child: Container(
-                constraints: BoxConstraints(maxWidth: _largeurBulle(context)),
-                // Bulle « posée » : dégradé très léger sur les miennes, liseré
-                // et ombre courte sur celles des autres. Une couleur plate sur
-                // un fond plat donne l'impression d'un tableur.
-                decoration: BoxDecoration(
-                  color: isMine ? null : colorScheme.surface,
-                  gradient: isMine
-                      ? LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            colorScheme.primary,
-                            Color.alphaBlend(
-                              Colors.black.withValues(alpha: 0.10),
-                              colorScheme.primary,
-                            ),
-                          ],
-                        )
-                      : null,
-                  border: isMine
-                      ? null
-                      : Border.all(color: colorScheme.outlineVariant),
-                  boxShadow: RempartTokens.ombreLegere(theme.brightness),
-                  borderRadius: BorderRadius.only(
-                    topLeft: const Radius.circular(RempartTokens.rayonBulle),
-                    topRight: const Radius.circular(RempartTokens.rayonBulle),
-                    bottomLeft: Radius.circular(
-                      isMine ? RempartTokens.rayonBulle : 6,
-                    ),
-                    bottomRight: Radius.circular(
-                      isMine ? 6 : RempartTokens.rayonBulle,
-                    ),
-                  ),
-                ),
+              // Bulle de message, et sous elle ses réactions
+              Flexible(
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: isMine
+                      ? CrossAxisAlignment.end
+                      : CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Réponse à un message
-                    if (event.isReply) _buildReplyPreview(context),
-
-                    // Contenu du message
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 9,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Dans un groupe, qui parle doit se lire sans
-                          // remonter à l'avatar : plusieurs voix se suivent.
-                          if (!isMine && showAvatar && !event.room.isDirectChat)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 2),
-                              child: Text(
-                                event.senderDisplayName,
-                                style: theme.textTheme.labelMedium?.copyWith(
-                                  color: _couleurExpediteur(
-                                    event.senderId,
-                                    theme.brightness,
-                                  ),
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
+                    GestureDetector(
+                      onTap: onTap,
+                      onDoubleTap: onDoubleTap,
+                      onLongPress: onLongPress,
+                      child: Container(
+                        constraints:
+                            BoxConstraints(maxWidth: _largeurBulle(context)),
+                        // Bulle « posée » : dégradé très léger sur les miennes, liseré
+                        // et ombre courte sur celles des autres. Une couleur plate sur
+                        // un fond plat donne l'impression d'un tableur.
+                        decoration: BoxDecoration(
+                          color: isMine ? null : colorScheme.surface,
+                          gradient: isMine
+                              ? LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [
+                                    colorScheme.primary,
+                                    Color.alphaBlend(
+                                      Colors.black.withValues(alpha: 0.10),
+                                      colorScheme.primary,
+                                    ),
+                                  ],
+                                )
+                              : null,
+                          border: isMine
+                              ? null
+                              : Border.all(color: colorScheme.outlineVariant),
+                          boxShadow:
+                              RempartTokens.ombreLegere(theme.brightness),
+                          borderRadius: BorderRadius.only(
+                            topLeft:
+                                const Radius.circular(RempartTokens.rayonBulle),
+                            topRight:
+                                const Radius.circular(RempartTokens.rayonBulle),
+                            bottomLeft: Radius.circular(
+                              isMine ? RempartTokens.rayonBulle : 6,
                             ),
-                          // Pièces jointes (images, fichiers)
-                          if (affiche.isImageMessage ||
-                              affiche.isFileMessage ||
-                              affiche.isVideoMessage ||
-                              affiche.isAudioMessage)
-                            _buildAttachment(context, affiche),
-
-                          // Légende d'une pièce jointe : c'est un texte à
-                          // part entière, sous le fichier.
-                          if (legende != null)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 6),
-                              child: Text(
-                                legende,
-                                style: styleCorps.copyWith(
-                                  color: isMine
-                                      ? colorScheme.onPrimary
-                                      : colorScheme.onSurface,
-                                ),
-                              ),
+                            bottomRight: Radius.circular(
+                              isMine ? 6 : RempartTokens.rayonBulle,
                             ),
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Réponse à un message
+                            if (event.isReply) _buildReplyPreview(context),
 
-                          // Texte du message. Un corps mis en forme
-                          // (`formatted_body`) passe par le rendu riche : sans
-                          // lui, un bloc de code d'agent arriverait aplati.
-                          // Sans légende, le corps d'un média est son nom de
-                          // fichier : rien à afficher pour une photo, une
-                          // vidéo, un vocal ou un fichier, dont la vignette
-                          // porte déjà le nom (il s'affichait deux fois).
-                          if (legende == null &&
-                              !affiche.isAudioMessage &&
-                              !affiche.isVideoMessage &&
-                              !affiche.isFileMessage &&
-                              (affiche.isTextMessage ||
-                                  (affiche.plaintextBody.isNotEmpty &&
-                                      !affiche.isImageMessage)))
-                            // Un code ou un mot de passe reste flouté jusqu'à
-                            // ce qu'on le demande : de quoi lire ses messages
-                            // en public sans livrer un secret au premier
-                            // regard par-dessus l'épaule. Le masque enveloppe
-                            // tout le corps, et non le seul jeton : « le mdp
-                            // du wifi est ... » en dit déjà trop.
-                            _PeutEtreMasque(
-                              masquer: !affiche.isDeleted &&
-                                  ressembleAUnSecret(affiche.plaintextBody),
-                              surFondPropre: isMine,
-                              // Le rendu riche ne pose aucune taille et lit
-                              // celle qu'il hérite : c'est par ce style que
-                              // les deux chemins se rejoignent, et par lui que
-                              // le réglage de l'utilisateur les atteint tous
-                              // les deux.
-                              enfant: DefaultTextStyle.merge(
-                                style: styleCorps,
-                                child: affiche.corpsFormate != null &&
-                                        !affiche.isDeleted
-                                    ? MessageRiche(
-                                        formattedBody: affiche.corpsFormate!,
-                                        couleurTexte: isMine
-                                            ? colorScheme.onPrimary
-                                            : colorScheme.onSurface,
-                                        surFondPropre: isMine,
-                                      )
-                                    // `TexteAvecLiens` et non `Text` : un
-                                    // message sans mise en forme contient lui
-                                    // aussi des adresses, mortes jusqu'ici.
-                                    : TexteAvecLiens(
-                                        texte: affiche.displayText,
-                                        surFondPropre: isMine,
+                            // Contenu du message
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 9,
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Dans un groupe, qui parle doit se lire sans
+                                  // remonter à l'avatar : plusieurs voix se suivent.
+                                  if (!isMine &&
+                                      showAvatar &&
+                                      !event.room.isDirectChat)
+                                    Padding(
+                                      padding: const EdgeInsets.only(bottom: 2),
+                                      child: Text(
+                                        event.senderDisplayName,
+                                        style: theme.textTheme.labelMedium
+                                            ?.copyWith(
+                                          color: _couleurExpediteur(
+                                            event.senderId,
+                                            theme.brightness,
+                                          ),
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  // Pièces jointes (images, fichiers)
+                                  if (affiche.isImageMessage ||
+                                      affiche.isFileMessage ||
+                                      affiche.isVideoMessage ||
+                                      affiche.isAudioMessage)
+                                    _buildAttachment(context, affiche),
+
+                                  // Légende d'une pièce jointe : c'est un texte à
+                                  // part entière, sous le fichier.
+                                  if (legende != null)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 6),
+                                      child: Text(
+                                        legende,
                                         style: styleCorps.copyWith(
                                           color: isMine
                                               ? colorScheme.onPrimary
                                               : colorScheme.onSurface,
-                                          fontStyle: affiche.isDeleted ||
-                                                  affiche.estIllisible
-                                              ? FontStyle.italic
-                                              : FontStyle.normal,
                                         ),
                                       ),
+                                    ),
+
+                                  // Texte du message. Un corps mis en forme
+                                  // (`formatted_body`) passe par le rendu riche : sans
+                                  // lui, un bloc de code d'agent arriverait aplati.
+                                  // Sans légende, le corps d'un média est son nom de
+                                  // fichier : rien à afficher pour une photo, une
+                                  // vidéo, un vocal ou un fichier, dont la vignette
+                                  // porte déjà le nom (il s'affichait deux fois).
+                                  if (legende == null &&
+                                      !affiche.isAudioMessage &&
+                                      !affiche.isVideoMessage &&
+                                      !affiche.isFileMessage &&
+                                      (affiche.isTextMessage ||
+                                          (affiche.plaintextBody.isNotEmpty &&
+                                              !affiche.isImageMessage)))
+                                    // Un code ou un mot de passe reste flouté jusqu'à
+                                    // ce qu'on le demande : de quoi lire ses messages
+                                    // en public sans livrer un secret au premier
+                                    // regard par-dessus l'épaule. Le masque enveloppe
+                                    // tout le corps, et non le seul jeton : « le mdp
+                                    // du wifi est ... » en dit déjà trop.
+                                    _PeutEtreMasque(
+                                      masquer: !affiche.isDeleted &&
+                                          ressembleAUnSecret(
+                                              affiche.plaintextBody),
+                                      surFondPropre: isMine,
+                                      // Le rendu riche ne pose aucune taille et lit
+                                      // celle qu'il hérite : c'est par ce style que
+                                      // les deux chemins se rejoignent, et par lui que
+                                      // le réglage de l'utilisateur les atteint tous
+                                      // les deux.
+                                      enfant: DefaultTextStyle.merge(
+                                        style: styleCorps,
+                                        child: affiche.corpsFormate != null &&
+                                                !affiche.isDeleted
+                                            ? MessageRiche(
+                                                formattedBody:
+                                                    affiche.corpsFormate!,
+                                                couleurTexte: isMine
+                                                    ? colorScheme.onPrimary
+                                                    : colorScheme.onSurface,
+                                                surFondPropre: isMine,
+                                              )
+                                            // `TexteAvecLiens` et non `Text` : un
+                                            // message sans mise en forme contient lui
+                                            // aussi des adresses, mortes jusqu'ici.
+                                            : TexteAvecLiens(
+                                                texte: affiche.displayText,
+                                                surFondPropre: isMine,
+                                                style: styleCorps.copyWith(
+                                                  color: isMine
+                                                      ? colorScheme.onPrimary
+                                                      : colorScheme.onSurface,
+                                                  fontStyle: affiche
+                                                              .isDeleted ||
+                                                          affiche.estIllisible
+                                                      ? FontStyle.italic
+                                                      : FontStyle.normal,
+                                                ),
+                                              ),
+                                      ),
+                                    ),
+
+                                  const SizedBox(height: 4),
+
+                                  // Heure et statut
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        DateFormat.Hm()
+                                            .format(event.originServerTs),
+                                        style: theme.textTheme.labelSmall
+                                            ?.copyWith(
+                                          fontSize: 11,
+                                          color: isMine
+                                              ? colorScheme.onPrimary
+                                                  .withAlpha(190)
+                                              : colorScheme.onSurfaceVariant,
+                                        ),
+                                      ),
+                                      if (modifie) ...[
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          'modifié',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontStyle: FontStyle.italic,
+                                            color: isMine
+                                                ? colorScheme.onPrimary
+                                                    .withAlpha(179)
+                                                : colorScheme.onSurface
+                                                    .withAlpha(128),
+                                          ),
+                                        ),
+                                      ],
+                                      if (isMine) ...[
+                                        const SizedBox(width: 4),
+                                        Icon(
+                                          _iconeStatut(lu: lu),
+                                          size: 14,
+                                          color: _couleurStatut(colorScheme,
+                                              lu: lu),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ],
                               ),
                             ),
-
-                          const SizedBox(height: 4),
-
-                          // Heure et statut
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                DateFormat.Hm().format(event.originServerTs),
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  fontSize: 11,
-                                  color: isMine
-                                      ? colorScheme.onPrimary.withAlpha(190)
-                                      : colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                              if (modifie) ...[
-                                const SizedBox(width: 4),
-                                Text(
-                                  'modifié',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontStyle: FontStyle.italic,
-                                    color: isMine
-                                        ? colorScheme.onPrimary.withAlpha(179)
-                                        : colorScheme.onSurface.withAlpha(128),
-                                  ),
-                                ),
-                              ],
-                              if (isMine) ...[
-                                const SizedBox(width: 4),
-                                Icon(
-                                  _iconeStatut(lu: lu),
-                                  size: 14,
-                                  color: _couleurStatut(colorScheme, lu: lu),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
+                    ),
+                    _Boutons(event: event, onBouton: onBouton),
+                    _Reactions(
+                      event: event,
+                      timeline: timeline,
+                      onReagir: onReagir,
                     ),
                   ],
                 ),
               ),
-            ),
-                _Boutons(event: event, onBouton: onBouton),
-                _Reactions(
-                  event: event,
-                  timeline: timeline,
-                  onReagir: onReagir,
-                ),
-              ],
-            ),
-          ),
 
-          // Espace pour les messages envoyés
-          if (isMine) const SizedBox(width: 40),
+              // Espace pour les messages envoyés
+              if (isMine) const SizedBox(width: 40),
+            ],
+          ),
+          if (!isMine && !event.redacted)
+            Padding(
+              // Sous la bulle, pas sous l'avatar (32 + 8).
+              padding: const EdgeInsets.only(left: 40),
+              child: _ActionsMessage(
+                event: event,
+                timeline: timeline,
+                emojiJaime: ref.watch(emojiJaimeProvider),
+                onLire: onLire,
+                onReagir: reactionsPermises ? onReagir : null,
+              ),
+            ),
         ],
       ),
     );
@@ -410,16 +465,19 @@ class MessageBubble extends ConsumerWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: couleurs.nom,
-                  ),
+                        fontWeight: FontWeight.bold,
+                        color: couleurs.nom,
+                      ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   replyEvent?.texteApercu ?? '...',
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: couleurs.texte),
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: couleurs.texte),
                 ),
               ],
             ),
@@ -461,10 +519,9 @@ class MessageBubble extends ConsumerWidget {
         children: [
           Icon(
             _getFileIcon(fileInfo?.mimeType ?? ''),
-            color:
-                isMine
-                    ? Theme.of(context).colorScheme.onPrimary
-                    : Theme.of(context).colorScheme.primary,
+            color: isMine
+                ? Theme.of(context).colorScheme.onPrimary
+                : Theme.of(context).colorScheme.primary,
           ),
           const SizedBox(width: 8),
           Flexible(
@@ -477,19 +534,18 @@ class MessageBubble extends ConsumerWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontWeight: FontWeight.w500,
-                    color: isMine
-                        ? Theme.of(context).colorScheme.onPrimary
-                        : null,
+                    color:
+                        isMine ? Theme.of(context).colorScheme.onPrimary : null,
                   ),
                 ),
                 if (fileInfo?.formattedSize.isNotEmpty ?? false)
                   Text(
                     fileInfo!.formattedSize,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: isMine
-                          ? Colors.white70
-                          : Theme.of(context).colorScheme.outline,
-                    ),
+                          color: isMine
+                              ? Colors.white70
+                              : Theme.of(context).colorScheme.outline,
+                        ),
                   ),
               ],
             ),
@@ -776,11 +832,11 @@ class _VideoJointeState extends State<_VideoJointe> {
     );
 
     if (widget.enGrille) return contenu;
-    final ratio =
-        vignette?.ratio ?? _ratioAnnonce(widget.event) ?? 16 / 9;
+    final ratio = vignette?.ratio ?? _ratioAnnonce(widget.event) ?? 16 / 9;
     return ClipRRect(
       borderRadius: BorderRadius.circular(8),
-      child: AspectRatio(aspectRatio: ratio.clamp(9 / 16, 1.91), child: contenu),
+      child:
+          AspectRatio(aspectRatio: ratio.clamp(9 / 16, 1.91), child: contenu),
     );
   }
 }
@@ -855,7 +911,6 @@ class _PeutEtreMasqueState extends State<_PeutEtreMasque> {
   }
 }
 
-
 /// Les réactions posées sous un message.
 ///
 /// Un appui montre qui a réagi, et non une réaction de plus : dans un groupe,
@@ -903,8 +958,7 @@ class _Reactions extends StatelessWidget {
               ),
               borderRadius: BorderRadius.circular(999),
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: reaction.parMoi
                       ? theme.colorScheme.primary.withValues(alpha: 0.16)
@@ -927,7 +981,6 @@ class _Reactions extends StatelessWidget {
     );
   }
 }
-
 
 /// Qui a réagi à un message, et avec quoi.
 ///
@@ -1070,24 +1123,24 @@ class _Boutons extends StatelessWidget {
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: _largeurBulle(context)),
         child: Column(
-        children: [
-          for (final ligne in lignes)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: Row(
-                children: [
-                  for (final bouton in ligne) ...[
-                    Expanded(
-                      child: _BoutonReponse(
-                        texte: bouton.texte,
-                        onTap: () => onBouton!(bouton.texte, bouton.valeur),
+          children: [
+            for (final ligne in lignes)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  children: [
+                    for (final bouton in ligne) ...[
+                      Expanded(
+                        child: _BoutonReponse(
+                          texte: bouton.texte,
+                          onTap: () => onBouton!(bouton.texte, bouton.valeur),
+                        ),
                       ),
-                    ),
-                    if (bouton != ligne.last) const SizedBox(width: 8),
+                      if (bouton != ligne.last) const SizedBox(width: 8),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
           ],
         ),
       ),
@@ -1245,8 +1298,9 @@ class _VocalJoint extends ConsumerWidget {
     final position = lecteur.position(cle);
     final joue = lecteur.joue(cle);
     final chargement = lecteur.enChargement(cle);
-    final couleur =
-        isMine ? theme.colorScheme.onPrimary : theme.colorScheme.onSurfaceVariant;
+    final couleur = isMine
+        ? theme.colorScheme.onPrimary
+        : theme.colorScheme.onSurfaceVariant;
     final duree = _duree;
     final avancement = duree.inMilliseconds > 0
         ? (position.inMilliseconds / duree.inMilliseconds).clamp(0.0, 1.0)
@@ -1376,6 +1430,164 @@ class _VocalJoint extends ConsumerWidget {
               ),
             ),
           ),
+          _TranscriptionVocal(event: event, couleur: couleur),
+        ],
+      ),
+    );
+  }
+}
+
+/// La transcription d'un vocal, sous lui, une fois demandée (bouton « Tt »
+/// de la rangée d'actions).
+class _TranscriptionVocal extends StatelessWidget {
+  const _TranscriptionVocal({required this.event, required this.couleur});
+
+  final matrix.Event event;
+  final Color couleur;
+
+  @override
+  Widget build(BuildContext context) {
+    final service = TranscriptionVocale.instance;
+    return ListenableBuilder(
+      listenable: service,
+      builder: (context, _) {
+        final etat = service.etat(event);
+        if (etat == null) return const SizedBox.shrink();
+        final theme = Theme.of(context);
+        final discret = theme.textTheme.bodySmall?.copyWith(color: couleur);
+        final texte = etat.texte;
+        return Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: switch ((texte, etat.echec)) {
+            (_, final String echec) => Text(echec, style: discret),
+            (null, _) => Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator.adaptive(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(couleur),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text('Transcription...', style: discret),
+                ],
+              ),
+            ('', _) => Text(
+                'Aucune parole reconnue',
+                style: discret?.copyWith(fontStyle: FontStyle.italic),
+              ),
+            (final String texte, _) => Text(
+                texte,
+                style: theme.textTheme.bodyMedium?.copyWith(color: couleur),
+              ),
+          },
+        );
+      },
+    );
+  }
+}
+
+/// Rangée d'actions sous un message reçu : lire à voix haute, transcrire un
+/// vocal, j'aime ([emojiJaime], 👍 par défaut), pas d'accord (❌).
+///
+/// Les pouces sont des réactions ordinaires : un agent qui demande une
+/// validation les reçoit comme s'ils avaient été choisis dans le menu.
+class _ActionsMessage extends StatelessWidget {
+  const _ActionsMessage({
+    required this.event,
+    required this.timeline,
+    required this.emojiJaime,
+    required this.onLire,
+    required this.onReagir,
+  });
+
+  final matrix.Event event;
+  final matrix.Timeline? timeline;
+  final String emojiJaime;
+  final VoidCallback? onLire;
+  final void Function(String symbole)? onReagir;
+
+  @override
+  Widget build(BuildContext context) {
+    final couleur = Theme.of(context).colorScheme.onSurfaceVariant;
+    final fil = timeline;
+    bool mienne(String symbole) =>
+        fil != null &&
+        MatrixService.reactionDeMoi(
+              event,
+              fil,
+              symbole,
+              event.room.client.userID,
+            ) !=
+            null;
+
+    Widget bouton({
+      required IconData icone,
+      required String bulle,
+      required VoidCallback onPressed,
+    }) =>
+        IconButton(
+          onPressed: onPressed,
+          tooltip: bulle,
+          icon: Icon(icone, size: 18),
+          color: couleur,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints.tightFor(width: 36, height: 32),
+          style: IconButton.styleFrom(
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+        );
+
+    final transcription = TranscriptionVocale.instance;
+    return Padding(
+      padding: const EdgeInsets.only(top: 2),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (onLire != null)
+            ValueListenableBuilder<String?>(
+              valueListenable: LectureVoix.instance.enCours,
+              builder: (context, enCours, _) => bouton(
+                icone: enCours == event.eventId
+                    ? Icons.pause_rounded
+                    : Icons.volume_up_outlined,
+                bulle: enCours == event.eventId
+                    ? 'Arrêter la lecture'
+                    : 'Lire à voix haute',
+                onPressed: onLire!,
+              ),
+            ),
+          if (event.isAudioMessage)
+            FutureBuilder<bool>(
+              future: transcription.disponible(),
+              builder: (context, disponible) => disponible.data ?? false
+                  ? bouton(
+                      icone: Icons.text_fields_rounded,
+                      bulle: 'Transcrire',
+                      onPressed: () =>
+                          unawaited(transcription.transcrire(event)),
+                    )
+                  : const SizedBox.shrink(),
+            ),
+          if (onReagir != null) ...[
+            bouton(
+              icone: mienne(emojiJaime)
+                  ? Icons.thumb_up_rounded
+                  : Icons.thumb_up_outlined,
+              bulle: "J'aime",
+              onPressed: () => onReagir!(emojiJaime),
+            ),
+            bouton(
+              icone: mienne('❌')
+                  ? Icons.thumb_down_rounded
+                  : Icons.thumb_down_outlined,
+              bulle: "Je n'aime pas",
+              onPressed: () => onReagir!('❌'),
+            ),
+          ],
         ],
       ),
     );
@@ -1473,9 +1685,9 @@ class _FormeOnde extends CustomPainter {
       final valeur = valeurs.isEmpty
           ? 0.35
           : valeurs[(i * valeurs.length / nombre).floor().clamp(
-                0,
-                valeurs.length - 1,
-              )] /
+                    0,
+                    valeurs.length - 1,
+                  )] /
               1024;
       // Un minimum visible : une barre de hauteur nulle ferait un trou dans la
       // silhouette, qu'on lirait comme un défaut d'affichage.

@@ -201,6 +201,34 @@ class MainActivity : FlutterActivity() {
                 }
             }.start()
         }
+        // Transcription d'un vocal, sur l'appareil seulement (Transcription).
+        MethodChannel(engine.dartExecutor.binaryMessenger, "rempart/transcription")
+            .setMethodCallHandler { appel, reponse ->
+                when (appel.method) {
+                    "disponible" -> reponse.success(Transcription.disponible(applicationContext))
+                    "transcrire" -> {
+                        val chemin = appel.argument<String>("chemin")
+                        if (chemin == null || !Transcription.disponible(applicationContext) ||
+                            Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU
+                        ) {
+                            reponse.error("indisponible", null, null)
+                        } else {
+                            Transcription.transcrire(
+                                applicationContext,
+                                chemin,
+                                appel.argument<String>("langue") ?: "fr-FR",
+                            ) { texte, code, message ->
+                                if (code == null) {
+                                    reponse.success(texte)
+                                } else {
+                                    reponse.error(code, message, null)
+                                }
+                            }
+                        }
+                    }
+                    else -> reponse.notImplemented()
+                }
+            }
         MethodChannel(engine.dartExecutor.binaryMessenger, canal).setMethodCallHandler {
             appel, reponse ->
             when (appel.method) {
