@@ -35,14 +35,21 @@ void main() {
     );
   });
 
-  testWidgets("le bouton d'envoi l'est aussi", (tester) async {
-    await poser(tester);
-    final micro = tester.getRect(find.byIcon(Icons.mic_none_rounded));
-    final texte = tester.getRect(find.byType(EditableText));
-    expect(
-      (micro.center.dy - texte.center.dy).abs(),
-      lessThan(1),
-      reason: 'micro ${micro.center.dy}, texte ${texte.center.dy}',
-    );
-  });
+  // Sur toutes les plateformes : sur ordinateur, donc dans la version web,
+  // Flutter ne réserve pas de zone de toucher autour d'un bouton, et le bouton
+  // rond, plus court que la rangée, tombait 4 points plus bas que le texte.
+  testWidgets(
+    "le bouton d'envoi l'est aussi",
+    (tester) async {
+      await poser(tester);
+      final micro = tester.getRect(find.byIcon(Icons.mic_none_rounded));
+      final texte = tester.getRect(find.byType(EditableText));
+      expect(
+        (micro.center.dy - texte.center.dy).abs(),
+        lessThan(1),
+        reason: 'micro ${micro.center.dy}, texte ${texte.center.dy}',
+      );
+    },
+    variant: TargetPlatformVariant.all(),
+  );
 }

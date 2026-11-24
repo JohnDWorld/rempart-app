@@ -87,6 +87,14 @@ class MessageInput extends StatefulWidget {
 /// `test/barre_saisie_alignement_test.dart` mesure le résultat.
 const _tailleBouton = BoxConstraints(minWidth: 40, minHeight: 48);
 
+/// Le bouton rond (micro, envoyer) mesure 40 points, posé dans une zone de
+/// toucher de 48 que Flutter n'ajoute que sur téléphone. Sur ordinateur, donc
+/// dans la version web, il restait à 40 et tombait plus bas que le texte.
+const _zoneBoutonRond = ButtonStyle(
+  tapTargetSize: MaterialTapTargetSize.padded,
+  visualDensity: VisualDensity.standard,
+);
+
 class _MessageInputState extends State<MessageInput> {
   late final _controller = TextEditingController(text: widget.texteInitial);
   // Le nœud porte lui-même l'écoute du clavier : un `Focus` autour du champ
@@ -705,6 +713,7 @@ class _MessageInputState extends State<MessageInput> {
                                                     theme.brightness),
                                           ),
                                           child: IconButton.filled(
+                                            style: _zoneBoutonRond,
                                             onPressed: widget.enabled
                                                 ? _sendMessage
                                                 : null,
@@ -722,6 +731,7 @@ class _MessageInputState extends State<MessageInput> {
                                                     theme.brightness),
                                           ),
                                           child: IconButton.filled(
+                                            style: _zoneBoutonRond,
                                             onPressed: widget.enabled &&
                                                     widget.onVocal != null &&
                                                     EnregistreurVocal
