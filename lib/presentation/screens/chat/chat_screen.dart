@@ -101,6 +101,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   // seul moment où il faut aller en chercher davantage.
   final _itemPositionsListener = ItemPositionsListener.create();
   final _searchController = TextEditingController();
+
+  /// Le texte de la barre de saisie : un lien partagé seul l'y attend, et ce
+  /// qu'on a tapé devient la légende d'une pièce jointe.
+  late final _saisie = TextEditingController(
+    text: widget.partage?.fichiers.isEmpty ?? false
+        ? widget.partage?.texte
+        : null,
+  );
   matrix.Event? _replyTo;
   matrix.Timeline? _timeline;
 
@@ -181,6 +189,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     _finSurvol?.cancel();
     _highlightTimer?.cancel();
     _searchController.dispose();
+    _saisie.dispose();
     _timeline?.cancelSubscriptions();
     super.dispose();
   }
@@ -635,8 +644,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     // rattachait de tête. C'est aussi là que se décide la qualité.
     final limite = await ref.read(matrixServiceProvider).limiteEnvoi();
     if (!mounted) return;
-    final choix = await _demanderLegende(fichiers, limite, legende: legende);
+    // Le texte déjà tapé devient la légende : l'image partait sans lui, et il
+    // restait dans la barre, à envoyer à part. Il ne quitte la barre qu'à
+    // l'envoi, renoncer le laisse en place.
+    final tape = _saisie.text.trim();
+    final choix =
+        await _demanderLegende(fichiers, limite, legende: legende ?? tape);
     if (choix == null || !mounted) return;
+    if (legende == null) _saisie.clear();
     await _envoyerPiecesJointes(fichiers, choix, limite: limite);
   }
 
@@ -2109,9 +2124,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                         onEnregistrement: _signalerEnregistrement,
                         room: room,
                         onVocal: _envoyerVocal,
-                        texteInitial: widget.partage?.fichiers.isEmpty ?? false
-                            ? widget.partage?.texte
-                            : null,
+                        controleur: _saisie,
                       ),
                   ],
                 ),

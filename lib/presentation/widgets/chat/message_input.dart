@@ -29,7 +29,7 @@ class MessageInput extends StatefulWidget {
     this.room,
     this.onVocal,
     this.enabled = true,
-    this.texteInitial,
+    this.controleur,
   });
 
   final Function(String message) onSend;
@@ -56,9 +56,10 @@ class MessageInput extends StatefulWidget {
 
   final bool enabled;
 
-  /// Texte déjà dans le champ à l'ouverture : un lien partagé depuis une
-  /// autre application, à compléter avant de l'envoyer.
-  final String? texteInitial;
+  /// Le texte du champ, tenu par l'écran de conversation : il devient la
+  /// légende d'une pièce jointe, et survit à la barre retirée pendant une
+  /// recherche. Absent, le champ a le sien.
+  final TextEditingController? controleur;
 
   @override
   State<MessageInput> createState() => _MessageInputState();
@@ -96,11 +97,12 @@ const _zoneBoutonRond = ButtonStyle(
 );
 
 class _MessageInputState extends State<MessageInput> {
-  late final _controller = TextEditingController(text: widget.texteInitial);
+  late final _controller = (widget.controleur ?? TextEditingController())
+    ..addListener(_surControleur);
   // Le nœud porte lui-même l'écoute du clavier : un `Focus` autour du champ
   // ferait la même chose en ajoutant un cran d'imbrication.
   late final _focusNode = FocusNode()..onKeyEvent = _surToucheClavier;
-  late bool _hasText = widget.texteInitial?.trim().isNotEmpty ?? false;
+  late bool _hasText = _controller.text.trim().isNotEmpty;
 
   /// Extinction automatique : sans elle, quitter le champ sans envoyer
   /// laisserait le contact devant un « en train d'écrire » perpétuel.
@@ -136,9 +138,16 @@ class _MessageInputState extends State<MessageInput> {
     if (_saisieSignalee) {
       widget.onTyping?.call(actif: false);
     }
-    _controller.dispose();
+    _controller.removeListener(_surControleur);
+    if (widget.controleur == null) _controller.dispose();
     _focusNode.dispose();
     super.dispose();
+  }
+
+  /// Vidé par l'écran (le texte est parti en légende) : `onChanged` ne voit
+  /// que la frappe, et la barre garderait le bouton d'envoi.
+  void _surControleur() {
+    if (_hasText && _controller.text.trim().isEmpty) _onTextChanged();
   }
 
   void _onTextChanged() {
