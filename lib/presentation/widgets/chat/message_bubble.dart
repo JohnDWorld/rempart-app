@@ -41,6 +41,7 @@ class MessageBubble extends ConsumerWidget {
     this.onDoubleTap,
     this.reactionsPermises = true,
     this.onBouton,
+    this.reponseBouton,
     this.album,
     this.onOuvrirImage,
     this.highlighted = false,
@@ -71,6 +72,10 @@ class MessageBubble extends ConsumerWidget {
   /// Reçoit le **libellé** du bouton et sa **valeur** : le premier s'affiche
   /// dans la conversation, la seconde part à l'agent.
   final void Function(String texte, String valeur)? onBouton;
+
+  /// Le libellé déjà choisi parmi ces boutons : ils laissent alors place à ce
+  /// choix (voir `reponsesAuxBoutons`).
+  final String? reponseBouton;
 
   /// Médias d'un même envoi, [event] compris, ou null s'il est seul.
   ///
@@ -372,7 +377,11 @@ class MessageBubble extends ConsumerWidget {
                         ),
                       ),
                     ),
-                    _Boutons(event: event, onBouton: onBouton),
+                    _Boutons(
+                      event: event,
+                      onBouton: onBouton,
+                      reponse: reponseBouton,
+                    ),
                     _Reactions(
                       event: event,
                       timeline: timeline,
@@ -1093,10 +1102,18 @@ List<({String texte, String valeur})> boutonsDuContenu(
 /// doit rester compréhensible sans eux, ce que la passerelle rappelle aux
 /// agents : sur Element, la question doit rester répondable à la main.
 class _Boutons extends StatelessWidget {
-  const _Boutons({required this.event, required this.onBouton});
+  const _Boutons({
+    required this.event,
+    required this.onBouton,
+    required this.reponse,
+  });
 
   final matrix.Event event;
   final void Function(String texte, String valeur)? onBouton;
+
+  /// Le libellé que j'ai déjà choisi, ou `null` : la question est alors
+  /// encore ouverte (voir `reponsesAuxBoutons`).
+  final String? reponse;
 
   @override
   Widget build(BuildContext context) {
@@ -1106,6 +1123,35 @@ class _Boutons extends StatelessWidget {
 
     final boutons = boutonsDuContenu(event.content);
     if (boutons.isEmpty) return const SizedBox.shrink();
+
+    // Déjà répondu : les boutons laissent place au choix, en retrait. Sans
+    // eux on ne risque plus d'y retoucher, et dans une suite de questions on
+    // voit d'un coup d'oeil celles qui attendent encore.
+    if (reponse case final choix?) {
+      final theme = Theme.of(context);
+      final couleur = theme.colorScheme.onSurfaceVariant;
+      return Padding(
+        padding: const EdgeInsets.only(top: 6, left: 4),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: _largeurBulle(context)),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.check_rounded, size: 16, color: couleur),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  choix,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(color: couleur),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     // Deux par ligne, et le dernier seul prend toute la largeur : c'est la
     // forme d'un choix binaire coiffé d'un retrait (« Approuver / Toujours »,

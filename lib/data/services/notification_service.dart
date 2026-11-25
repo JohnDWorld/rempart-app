@@ -79,15 +79,34 @@ class NotificationService {
   /// l'utilisateur est déjà en train de lire.
   String? get roomOuverte => _roomOuverte;
 
-  /// Poser une conversation efface aussi sa notification en attente.
+  /// L'écran qui a ouvert [roomOuverte], seul à pouvoir la refermer.
+  Object? _ecranOuvert;
+
+  /// Ouvrir une conversation efface aussi sa notification en attente.
   ///
   /// Empêcher les nouvelles ne suffisait pas : celle qui avait fait ouvrir
   /// l'application restait dans le bandeau une fois le message lu, et il
   /// fallait la balayer à la main. C'est ici que ça se règle plutôt qu'à
   /// l'appel, pour que tout chemin qui ouvre une conversation en profite.
-  set roomOuverte(String? roomId) {
+  void ouvrirConversation(String roomId, Object ecran) {
+    _ecranOuvert = ecran;
     _roomOuverte = roomId;
-    if (roomId != null) unawaited(effacerNotification(roomId));
+    unawaited(effacerNotification(roomId));
+  }
+
+  /// Seul l'écran qui l'a ouverte referme la conversation.
+  ///
+  /// Toucher la notification d'une conversation déjà ouverte refait la pile
+  /// (`go('/home')` puis `push('/chat/…')`), et le nouvel écran s'ouvre AVANT
+  /// que l'ancien ne se ferme. Comparer l'identifiant de la room ne suffisait
+  /// pas : c'est le même, et l'ancien, en partant, libérait la conversation
+  /// que le nouveau affichait. Tout ce qui y arrivait ensuite sonnait,
+  /// conversation à l'écran, jusqu'à la réaction 👀 d'un agent à chaque
+  /// message (relevé le 2026-11-25).
+  void fermerConversation(Object ecran) {
+    if (!identical(_ecranOuvert, ecran)) return;
+    _ecranOuvert = null;
+    _roomOuverte = null;
   }
 
   /// Retire la notification d'une conversation, si elle est encore affichée.
@@ -666,6 +685,10 @@ class NotificationService {
       // autres s'échangent ferait un vacarme dont personne ne veut.
       final symbole = event.symboleReaction;
       if (symbole != null) {
+        // Le serveur ne pousse plus les réactions de mes bots (voir
+        // `corpsRegleBot`), mais ce chemin ne lit pas les règles : le 👀 d'un
+        // agent à chaque message sonnerait encore, application ouverte.
+        if (MatrixService.instance.estUnDeMesBots(event.senderId)) return;
         final cible = event.cibleReaction;
         if (cible == null) return;
         final vise = await room.getEventById(cible);

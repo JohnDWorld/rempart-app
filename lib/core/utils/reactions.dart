@@ -63,3 +63,64 @@ Map<String, Object?> corpsRegleReactions(String moi) => {
         {'set_tweak': 'sound', 'value': 'default'},
       ],
     };
+
+/// Préfixe des règles qui taisent les réactions de mes bots.
+const _prefixeRegleBot = 'fr.rempart.reactions_de_mon_bot.';
+
+/// Identifiant de la règle qui tait les réactions de [mxid].
+///
+/// Sans « @ » ni « : » : un identifiant qui voyage dans l'adresse de la
+/// requête doit revenir de Synapse tel qu'il est parti, encodé ou non.
+String regleBot(String mxid) =>
+    _prefixeRegleBot + mxid.replaceAll(RegExp('[^a-z0-9._-]'), '_');
+
+/// Une réaction de ce bot ne notifie pas (aucune action).
+///
+/// Un agent réagit 👀 à chaque message pour dire qu'il l'a vu : avec la règle
+/// de réaction, chacun sonnait, au téléphone, à la montre et dans la voiture
+/// (relevé le 2026-11-25). Ce qu'on attend de lui, c'est sa réponse. C'est
+/// le serveur qui les tait, et non l'application : un push urgent qui
+/// n'affiche rien pousse Google à rétrograder ceux de Rempart, vrais messages
+/// compris.
+Map<String, Object?> corpsRegleBot(String mxid) => {
+      'conditions': [
+        {'kind': 'event_match', 'key': 'type', 'pattern': 'm.reaction'},
+        {'kind': 'event_match', 'key': 'sender', 'pattern': mxid},
+      ],
+      'actions': <Object>[],
+    };
+
+/// Ce qu'il reste à faire pour que les réactions de [bots] se taisent.
+///
+/// [override] : les règles `override` du compte, dans l'ordre où Synapse les
+/// évalue. Une règle de bot ne tait rien si elle passe APRÈS [regleReactions],
+/// qui aurait déjà décidé de notifier. Or une règle posée sans position monte
+/// en tête : reposer la règle de réaction oblige donc à replacer les bots.
+/// [bots] à `null` (la passerelle n'a pas encore répondu) : on ne touche à
+/// aucune règle de bot.
+({bool reposerReactions, List<String> placer, List<String> retirer})
+    planReglesReactions({
+  required List<String> override,
+  required Set<String>? bots,
+}) {
+  final iReactions = override.indexOf(regleReactions);
+  final reposer = iReactions < 0;
+  bool enPlace(String bot) {
+    final i = override.indexOf(regleBot(bot));
+    return i >= 0 && i < iReactions;
+  }
+
+  final attendues = {for (final bot in bots ?? const <String>{}) regleBot(bot)};
+  return (
+    reposerReactions: reposer,
+    placer: [
+      for (final bot in bots ?? const <String>{})
+        if (reposer || !enPlace(bot)) bot,
+    ],
+    retirer: [
+      if (bots != null)
+        for (final id in override)
+          if (id.startsWith(_prefixeRegleBot) && !attendues.contains(id)) id,
+    ],
+  );
+}

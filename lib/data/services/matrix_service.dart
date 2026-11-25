@@ -203,10 +203,19 @@ class MatrixService {
   /// propres agents n'auraient aucun sens. Rempli au démarrage de session.
   Set<String> _mesBots = const {};
 
+  /// Faux tant que la passerelle n'a pas répondu : une liste vide ne dit pas
+  /// alors « aucun bot », et rien ne doit être retiré sur cette foi.
+  bool _mesBotsCharges = false;
+
   void definirMesBots(Iterable<String> mxids) {
     _mesBots = mxids.toSet();
+    _mesBotsCharges = true;
     _autoJoinInvites();
+    // Leurs réactions (le 👀 d'un agent à chaque message) ne sonnent pas.
+    unawaited(activerNotificationsDeReaction());
   }
+
+  bool estUnDeMesBots(String mxid) => _mesBots.contains(mxid);
 
   /// L'auteur d'une invitation : l'expéditeur de notre propre événement de
   /// membre, seul état que le serveur livre avant qu'on ait rejoint.
@@ -507,21 +516,58 @@ class MatrixService {
   /// l'application tourne, c'est `NotificationService` qui repère ces
   /// réactions.
   ///
-  /// Reposée à chaque démarrage, et pas seulement à la connexion : la règle
+  /// Vérifiée à chaque démarrage, et pas seulement à la connexion : la règle
   /// vit côté compte, et une session ouverte avant ce correctif ne l'aurait
-  /// jamais reçue. Best-effort : un serveur qui refuse ne doit rien bloquer.
-  Future<void> activerNotificationsDeReaction() async {
+  /// jamais reçue. Elle n'est reposée que si elle manque : reposée, elle
+  /// remonte en tête et passerait devant celles qui taisent les réactions de
+  /// mes bots (`planReglesReactions`). Best-effort : un serveur qui refuse ne
+  /// doit rien bloquer. Les appels s'enchaînent, jamais en parallèle : deux
+  /// passes croisées poseraient les règles dans le désordre.
+  Future<void> activerNotificationsDeReaction() =>
+      _reglesDeReaction = _reglesDeReaction.then((_) => _reglerReactions());
+
+  Future<void> _reglesDeReaction = Future.value();
+
+  Future<void> _reglerReactions() async {
     final client = _client;
     final moi = client?.userID;
     if (client == null || moi == null) return;
     try {
-      await client.request(
-        RequestType.PUT,
-        '/client/v3/pushrules/global/override/$regleReactions',
-        data: corpsRegleReactions(moi),
+      final regles =
+          await client.request(RequestType.GET, '/client/v3/pushrules/');
+      final global = regles['global'];
+      final override = global is Map ? global['override'] : null;
+      final plan = planReglesReactions(
+        override: [
+          if (override is List)
+            for (final regle in override)
+              if (regle is Map && regle['rule_id'] is String)
+                regle['rule_id'] as String,
+        ],
+        bots: _mesBotsCharges ? _mesBots : null,
       );
+      String chemin(String id) =>
+          '/client/v3/pushrules/global/override/${Uri.encodeComponent(id)}';
+      if (plan.reposerReactions) {
+        await client.request(
+          RequestType.PUT,
+          chemin(regleReactions),
+          data: corpsRegleReactions(moi),
+        );
+      }
+      for (final bot in plan.placer) {
+        await client.request(
+          RequestType.PUT,
+          chemin(regleBot(bot)),
+          query: {'before': regleReactions},
+          data: corpsRegleBot(bot),
+        );
+      }
+      for (final id in plan.retirer) {
+        await client.request(RequestType.DELETE, chemin(id));
+      }
     } catch (e) {
-      debugPrint('MatrixService: règle de réaction non posée ($e)');
+      debugPrint('MatrixService: règles de réaction non posées ($e)');
     }
   }
 

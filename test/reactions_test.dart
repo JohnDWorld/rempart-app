@@ -55,4 +55,75 @@ void main() {
       {'set_tweak': 'sound', 'value': 'default'},
     ]);
   });
+
+  group('réactions de mes bots, tues par le serveur', () {
+    const sindri = '@sindri:r';
+    const saga = '@saga:r';
+
+    test('une règle muette par bot, sans notification', () {
+      final corps = corpsRegleBot(sindri);
+      expect(corps['actions'], isEmpty);
+      // Il voyage dans l'adresse : rien qui puisse revenir encodé.
+      expect(regleBot('@sindri:rempart-messenger.fr'), isNot(contains('@')));
+      expect(regleBot('@sindri:rempart-messenger.fr'), isNot(contains(':')));
+      expect(corps['conditions'], [
+        {'kind': 'event_match', 'key': 'type', 'pattern': 'm.reaction'},
+        {'kind': 'event_match', 'key': 'sender', 'pattern': sindri},
+      ]);
+    });
+
+    test('première fois : tout se pose, la règle de réaction d abord', () {
+      final plan = planReglesReactions(override: [], bots: {sindri, saga});
+      expect(plan.reposerReactions, isTrue);
+      expect(plan.placer, unorderedEquals([sindri, saga]));
+      expect(plan.retirer, isEmpty);
+    });
+
+    test('déjà en place, au-dessus de la règle de réaction : rien à faire', () {
+      final plan = planReglesReactions(
+        override: [regleBot(sindri), regleBot(saga), regleReactions],
+        bots: {sindri, saga},
+      );
+      expect(plan.reposerReactions, isFalse);
+      expect(plan.placer, isEmpty);
+      expect(plan.retirer, isEmpty);
+    });
+
+    test('une règle de bot passée SOUS la règle de réaction est replacée', () {
+      // Synapse évalue dans l ordre : en dessous, elle ne tait plus rien.
+      final plan = planReglesReactions(
+        override: [regleBot(sindri), regleReactions, regleBot(saga)],
+        bots: {sindri, saga},
+      );
+      expect(plan.placer, [saga]);
+    });
+
+    test('règle de réaction absente : reposée, et tous les bots replacés', () {
+      // Reposée, elle remonte en tête et passerait devant eux.
+      final plan = planReglesReactions(
+        override: [regleBot(sindri)],
+        bots: {sindri},
+      );
+      expect(plan.reposerReactions, isTrue);
+      expect(plan.placer, [sindri]);
+    });
+
+    test('un bot qui n est plus à moi retrouve ses notifications', () {
+      // Un nom de bot supprimé peut être repris par quelqu un d autre.
+      final plan = planReglesReactions(
+        override: [regleBot(sindri), regleBot('@ancien_bot:r'), regleReactions],
+        bots: {sindri},
+      );
+      expect(plan.retirer, [regleBot('@ancien_bot:r')]);
+    });
+
+    test('liste des bots inconnue : on ne pose ni ne retire rien', () {
+      final plan = planReglesReactions(
+        override: [regleBot(sindri), regleReactions],
+        bots: null,
+      );
+      expect(plan.placer, isEmpty);
+      expect(plan.retirer, isEmpty);
+    });
+  });
 }

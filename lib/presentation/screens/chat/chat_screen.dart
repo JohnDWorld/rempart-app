@@ -24,6 +24,7 @@ import '../../../core/plateforme.dart';
 import '../../../core/telechargement.dart';
 import '../../../core/utils/activite.dart';
 import '../../../core/utils/groupe_album.dart';
+import '../../../core/utils/reponse_bouton.dart';
 import '../../../data/models/bot.dart';
 import '../../../data/models/matrix_extensions.dart';
 import '../../../data/models/user_bot.dart';
@@ -153,7 +154,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     super.initState();
     _retour = AppLifecycleListener(onResume: _auRetour);
     // Pas de notification pour la conversation qu'on est en train de lire.
-    NotificationService.instance.roomOuverte = widget.conversationId;
+    NotificationService.instance
+        .ouvrirConversation(widget.conversationId, this);
     _itemPositionsListener.itemPositions.addListener(_surDefilement);
     _initTimeline();
     _arreterFichiersEntrants = ecouterFichiersEntrants(
@@ -168,9 +170,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   @override
   void dispose() {
-    if (NotificationService.instance.roomOuverte == widget.conversationId) {
-      NotificationService.instance.roomOuverte = null;
-    }
+    NotificationService.instance.fermerConversation(this);
     // Le lecteur des vocaux vit hors des bulles : il continuerait sinon de
     // jouer une conversation qu'on a quittée.
     unawaited(LecteurVocal.instance.arreter());
@@ -1896,7 +1896,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     // Les photos d'un même envoi se rassemblent en une bulle. Calculé ici, une
     // fois par construction du fil, et non dans chaque tuile : le groupe d'un
     // message dépend de ses voisins.
-    return _buildEcran(room, events, grouperParAlbum(events), currentUserId);
+    return _buildEcran(
+      room,
+      events,
+      grouperParAlbum(events),
+      currentUserId,
+      // Sur tout le fil chargé, pas seulement les résultats d'une recherche :
+      // la réponse n'y figure pas forcément.
+      reponsesAuxBoutons(messages, currentUserId),
+    );
   }
 
   /// L'écran, identique sur les deux plateformes.
@@ -1910,6 +1918,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     List<matrix.Event> events,
     List<List<matrix.Event>> groupes,
     String? currentUserId,
+    Map<String, String> reponsesBoutons,
   ) {
     // En-tête flottant : rien ne le pousse, il se pose PAR-DESSUS le fil. On
     // réserve donc sa hauteur en rembourrage de liste, sinon le message le
@@ -2018,6 +2027,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                                         valeur,
                                         questionId: event.eventId,
                                       ),
+                                      reponseBouton:
+                                          reponsesBoutons[event.eventId],
                                       showAvatar: showAvatar,
                                       highlighted:
                                           event.eventId == _highlightedEventId,
