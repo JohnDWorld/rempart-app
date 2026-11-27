@@ -71,3 +71,6 @@ test_driver/screenshots/
 # depot ; les versions chiffrees (.enc) sont commitees, voir le Makefile.
 key.properties
 .env.production
+
+# Banc d'essai local (rempart-backend/scripts/banc-local.sh) : comptes de test
+.banc-local/
