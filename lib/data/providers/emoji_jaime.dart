@@ -2,15 +2,18 @@ import 'package:flutter_riverpod/legacy.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// L'emoji que pose « j'aime » : le pouce sous un message reçu, et le double
-/// appui sur lui. 👍 par défaut, au choix dans les paramètres.
-///
-/// ❌ n'est pas proposé : c'est déjà le pouce en bas, et les deux boutons
-/// poseraient la même réaction.
-const emojisJaime = ['👍', '❤️', '🔥', '😂', '😮', '🙏', '👏', '✅'];
+/// appui sur lui. 👍 par défaut, n'importe quel emoji au choix dans les
+/// paramètres.
+const emojiJaimeParDefaut = '👍';
+
+/// ❌ est refusé : c'est déjà le pouce en bas, et les deux boutons poseraient
+/// la même réaction.
+bool emojiJaimeAccepte(String? emoji) =>
+    emoji != null && emoji.trim().isNotEmpty && emoji != '❌';
 
 /// Choix courant. Injecté au démarrage par `main.dart` (voir
 /// [chargerEmojiJaime]), comme la taille du texte.
-final emojiJaimeProvider = StateProvider<String>((ref) => emojisJaime.first);
+final emojiJaimeProvider = StateProvider<String>((ref) => emojiJaimeParDefaut);
 
 const _cle = 'emoji_jaime';
 
@@ -18,10 +21,9 @@ Future<String> chargerEmojiJaime() async {
   try {
     final prefs = await SharedPreferences.getInstance();
     final emoji = prefs.getString(_cle);
-    // Un emoji retiré de la liste depuis ramène au défaut.
-    return emojisJaime.contains(emoji) ? emoji! : emojisJaime.first;
+    return emojiJaimeAccepte(emoji) ? emoji! : emojiJaimeParDefaut;
   } catch (_) {
-    return emojisJaime.first;
+    return emojiJaimeParDefaut;
   }
 }
 

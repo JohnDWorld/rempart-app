@@ -1,7 +1,7 @@
 name: rempart_app
 description: Rempart - Messagerie souveraine avec chiffrement E2E
 publish_to: 'none'
-version: 1.0.0+136
+version: 1.0.0+137
 environment:
   sdk: '>=3.3.0 <4.0.0'
 
@@ -127,6 +127,7 @@ dependencies:
   audioplayers: ^6.8.1
   flutter_image_compress: ^2.5.1
   flutter_tts: ^4.2.5
+  emoji_picker_flutter: ^4.5.4
 
   # ===========================================
   # BIOMETRIE (ajouter plus tard)

@@ -2,53 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../data/providers/emoji_jaime.dart';
-import '../adaptive/adaptive.dart';
+import '../chat/choix_emoji.dart';
 
-/// Réglage de l'emoji posé par « j'aime » (pouce ou double appui).
+/// Réglage de l'emoji posé par « j'aime » (pouce ou double appui) : tous les
+/// emojis, les derniers choisis en tête.
 class EmojiJaimeTile extends ConsumerWidget {
   const EmojiJaimeTile({super.key});
 
   Future<void> _choisir(BuildContext context, WidgetRef ref) async {
-    final actuel = ref.read(emojiJaimeProvider);
-    final choix = await feuilleAdaptative<String>(
-      context: context,
-      // Les widgets Material ont besoin d'un Material ancêtre dans un contexte
-      // Cupertino, où la feuille n'en fournit pas.
-      builder: (context) => Material(
-        color: Theme.of(context).colorScheme.surface,
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  "Emoji du j'aime",
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final emoji in emojisJaime)
-                      ChoiceChip(
-                        label:
-                            Text(emoji, style: const TextStyle(fontSize: 24)),
-                        selected: emoji == actuel,
-                        showCheckmark: false,
-                        onSelected: (_) => Navigator.pop(context, emoji),
-                      ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+    final messager = ScaffoldMessenger.of(context);
+    final choix = await choisirEmoji(context);
     if (choix == null) return;
+    if (!emojiJaimeAccepte(choix)) {
+      messager.showSnackBar(
+        const SnackBar(content: Text('❌ est déjà le pouce en bas')),
+      );
+      return;
+    }
     ref.read(emojiJaimeProvider.notifier).state = choix;
     await enregistrerEmojiJaime(choix);
   }

@@ -23,10 +23,27 @@ final _forme = RegExp(r'^[a-z](?:[a-z0-9]|[._](?=[a-z0-9]))+$');
 /// `bot`, convention Telegram) ou pour un identifiant Matrix (`u_<uuid>`).
 final _motifReserve = RegExp(r'^(rempart|u_)|bot$');
 const _reserves = {
-  'admin', 'administrateur', 'administrator', 'moderateur', 'moderation',
-  'moderator', 'support', 'aide', 'help', 'contact', 'securite', 'security',
-  'officiel', 'official', 'staff', 'equipe', 'team', 'systeme', 'system',
-  'root', 'noreply',
+  'admin',
+  'administrateur',
+  'administrator',
+  'moderateur',
+  'moderation',
+  'moderator',
+  'support',
+  'aide',
+  'help',
+  'contact',
+  'securite',
+  'security',
+  'officiel',
+  'official',
+  'staff',
+  'equipe',
+  'team',
+  'systeme',
+  'system',
+  'root',
+  'noreply',
 };
 
 /// La saisie telle que la base l'enregistre : minuscules, sans espace ni `@`
@@ -56,10 +73,9 @@ String? problemeNomUtilisateur(String nom) {
 
 /// Le message d'un refus rendu par la base ([raison] : `pris`, ou l'une des
 /// règles).
-String messageRefusNomUtilisateur(String raison, String nom) =>
-    raison == 'pris'
-        ? 'Ce nom est déjà pris'
-        : problemeNomUtilisateur(nom) ?? "Ce nom n'est pas permis";
+String messageRefusNomUtilisateur(String raison, String nom) => raison == 'pris'
+    ? 'Ce nom est déjà pris'
+    : problemeNomUtilisateur(nom) ?? "Ce nom n'est pas permis";
 
 /// Vrai si [nom] (normalisé) peut désigner un compte existant.
 ///
@@ -80,7 +96,7 @@ bool nomTireDeLAdresse(String nom, String email) =>
 /// que l'on change : « Hélène Dupont » donne `helene.dupont`. Vide si rien
 /// d'utilisable n'en sort.
 String suggestionNomUtilisateur(String nomAffiche) {
-  var nom = _sansAccents(nomAffiche.toLowerCase())
+  var nom = sansAccents(nomAffiche.toLowerCase())
       .replaceAll(RegExp(r"[\s'’-]+"), '.')
       .replaceAll(RegExp('[^a-z0-9._]'), '')
       .replaceAll(RegExp('[._]{2,}'), '.')
@@ -92,14 +108,39 @@ String suggestionNomUtilisateur(String nomAffiche) {
 }
 
 const _accents = {
-  'à': 'a', 'â': 'a', 'ä': 'a', 'á': 'a', 'ã': 'a', 'å': 'a', 'ç': 'c',
-  'é': 'e', 'è': 'e', 'ê': 'e', 'ë': 'e', 'î': 'i', 'ï': 'i', 'í': 'i',
-  'ì': 'i', 'ô': 'o', 'ö': 'o', 'ó': 'o', 'ò': 'o', 'õ': 'o', 'ù': 'u',
-  'û': 'u', 'ü': 'u', 'ú': 'u', 'ÿ': 'y', 'ý': 'y', 'ñ': 'n', 'œ': 'oe',
+  'à': 'a',
+  'â': 'a',
+  'ä': 'a',
+  'á': 'a',
+  'ã': 'a',
+  'å': 'a',
+  'ç': 'c',
+  'é': 'e',
+  'è': 'e',
+  'ê': 'e',
+  'ë': 'e',
+  'î': 'i',
+  'ï': 'i',
+  'í': 'i',
+  'ì': 'i',
+  'ô': 'o',
+  'ö': 'o',
+  'ó': 'o',
+  'ò': 'o',
+  'õ': 'o',
+  'ù': 'u',
+  'û': 'u',
+  'ü': 'u',
+  'ú': 'u',
+  'ÿ': 'y',
+  'ý': 'y',
+  'ñ': 'n',
+  'œ': 'oe',
   'æ': 'ae',
 };
 
-String _sansAccents(String texte) =>
+/// Minuscules françaises sans accent ni ligature (« cœur » donne « coeur »).
+String sansAccents(String texte) =>
     texte.split('').map((c) => _accents[c] ?? c).join();
 
 /// L'adresse des liens de contact : la version web de Rempart, qui ouvre le

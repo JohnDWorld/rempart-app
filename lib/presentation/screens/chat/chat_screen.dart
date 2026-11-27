@@ -43,6 +43,7 @@ import '../../../data/services/statut_presence.dart';
 import '../../widgets/adaptive/adaptive.dart';
 import '../../widgets/bots/configuration_bot.dart';
 import '../../widgets/chat/apercu_fichier.dart';
+import '../../widgets/chat/choix_emoji.dart';
 import '../../widgets/chat/glisser_pour_repondre.dart';
 import '../../widgets/chat/indicateur_activite.dart';
 import '../../widgets/chat/informations_message.dart';
@@ -1435,6 +1436,18 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 child: Text(symbole, style: const TextStyle(fontSize: 26)),
               ),
             ),
+          // Tous les autres, comme sur WhatsApp ou Signal.
+          IconButton(
+            tooltip: 'Autre emoji',
+            icon: const Icon(Icons.add_reaction_outlined),
+            onPressed: () async {
+              Navigator.pop(context);
+              final symbole = await choisirEmoji(context);
+              if (symbole != null && symbole.isNotEmpty && mounted) {
+                unawaited(_reagir(event, symbole));
+              }
+            },
+          ),
         ],
       ),
     );
