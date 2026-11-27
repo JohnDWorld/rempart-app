@@ -4,7 +4,7 @@ End-to-end encrypted messaging built on Matrix, with self-hosted,
 GDPR-compliant infrastructure in France. This repository holds the Flutter
 application (Android, iOS, web).
 
-**Released version: 1.0.0+138** · [rempart-messenger.fr](https://rempart-messenger.fr/en/)
+**Released version: 1.0.0+139** · [rempart-messenger.fr](https://rempart-messenger.fr/en/)
 
 > **Status:** accounts are open, with email address verification. The browser
 > version runs at [app.rempart-messenger.fr](https://app.rempart-messenger.fr);
@@ -100,7 +100,7 @@ The WebAssembly module in `web/pkg/` is built from
 Messagerie chiffrée de bout en bout (protocole Matrix), hébergement souverain
 en France. Ce dépôt porte le code de l'application Flutter (Android, iOS, web).
 
-**Version publiée : 1.0.0+138** · [rempart-messenger.fr](https://rempart-messenger.fr)
+**Version publiée : 1.0.0+139** · [rempart-messenger.fr](https://rempart-messenger.fr)
 
 > **État** : les inscriptions sont ouvertes, avec vérification de l'adresse
 > électronique. La version navigateur tourne sur
