@@ -36,6 +36,19 @@ List<ReactionGroupee> regrouperReactions(
   return parSymbole.values.toList();
 }
 
+/// Ce que change un appui sur [symbole], d'après mes réactions actuelles au
+/// message ([mes] : identifiant de l'événement vers son symbole).
+///
+/// Une réaction par personne, comme sur WhatsApp : le même symbole se retire,
+/// un autre remplace celui d'avant. Tout ce qui est à moi part dans les deux
+/// cas, doublons laissés par un autre client (Element en permet plusieurs)
+/// ou par une version d'avant compris.
+({bool envoyer, List<String> retirer}) planReaction(
+  Map<String, String> mes,
+  String symbole,
+) =>
+    (envoyer: !mes.containsValue(symbole), retirer: mes.keys.toList());
+
 /// Identifiant de la règle de push qui fait notifier les réactions à mes
 /// messages (voir `MatrixService.activerNotificationsDeReaction`).
 const regleReactions = 'fr.rempart.reactions_a_mes_messages';

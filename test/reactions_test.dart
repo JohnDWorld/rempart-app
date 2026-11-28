@@ -126,4 +126,30 @@ void main() {
       expect(plan.retirer, isEmpty);
     });
   });
+
+  group('une réaction par personne', () {
+    test('le premier appui ajoute', () {
+      final plan = planReaction({}, '👍');
+      expect(plan.envoyer, isTrue);
+      expect(plan.retirer, isEmpty);
+    });
+
+    test('le même symbole se retire', () {
+      final plan = planReaction({r'$a': '👍'}, '👍');
+      expect(plan.envoyer, isFalse);
+      expect(plan.retirer, [r'$a']);
+    });
+
+    test('un autre symbole remplace le précédent', () {
+      final plan = planReaction({r'$a': '👍'}, '❤️');
+      expect(plan.envoyer, isTrue);
+      expect(plan.retirer, [r'$a']);
+    });
+
+    test("les doublons d'un autre client partent aussi", () {
+      final plan = planReaction({r'$a': '👍', r'$b': '😂'}, '😂');
+      expect(plan.envoyer, isFalse);
+      expect(plan.retirer, [r'$a', r'$b']);
+    });
+  });
 }

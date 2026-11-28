@@ -1352,9 +1352,9 @@ class MatrixService {
 
   /// Réagit à un message, ou retire sa réaction si on l'avait déjà mise.
   ///
-  /// Bascule et non simple ajout : appuyer deux fois sur le même symbole est
-  /// le geste attendu pour se rétracter, et réagir deux fois n'aurait aucun
-  /// sens de toute façon.
+  /// Une réaction par personne (`planReaction`) : choisir un autre symbole
+  /// remplace le précédent. Le nouveau part AVANT le retrait de l'ancien : si
+  /// le réseau lâche entre les deux, il reste deux réactions plutôt qu'aucune.
   ///
   /// Les réactions ne sont pas décoratives ici : un agent qui propose « ✅ pour
   /// approuver » attend exactement cet événement, et sans elles il faut lui
@@ -1369,32 +1369,32 @@ class MatrixService {
     final room = client?.getRoomById(roomId);
     if (client == null || room == null) return;
 
-    final mienne = timeline == null
-        ? null
-        : reactionDeMoi(message, timeline, symbole, client.userID);
-    if (mienne != null) {
-      await room.redactEvent(mienne.eventId);
-      return;
+    final plan = planReaction(
+      timeline == null
+          ? const {}
+          : mesReactions(message, timeline, client.userID),
+      symbole,
+    );
+    if (plan.envoyer) await room.sendReaction(message.eventId, symbole);
+    for (final id in plan.retirer) {
+      await room.redactEvent(id);
     }
-    await room.sendReaction(message.eventId, symbole);
   }
 
-  /// Notre propre réaction à ce message avec ce symbole, s'il y en a une.
-  static Event? reactionDeMoi(
+  /// Mes réactions à ce message : identifiant de l'événement vers symbole.
+  static Map<String, String> mesReactions(
     Event message,
     Timeline timeline,
-    String symbole,
     String? moi,
-  ) {
-    for (final reaction
-        in message.aggregatedEvents(timeline, RelationshipTypes.reaction)) {
-      if (reaction.senderId != moi || reaction.redacted) continue;
-      final contenu =
-          reaction.content.tryGetMap<String, Object?>('m.relates_to');
-      if (contenu?['key'] == symbole) return reaction;
-    }
-    return null;
-  }
+  ) =>
+      {
+        for (final reaction
+            in message.aggregatedEvents(timeline, RelationshipTypes.reaction))
+          if (reaction.senderId == moi && !reaction.redacted)
+            if (reaction.content.tryGetMap<String, Object?>('m.relates_to')?[
+                'key'] case final String symbole)
+              reaction.eventId: symbole,
+      };
 
   /// Réactions d'un message, regroupées par symbole et rangées par ordre
   /// d'apparition (voir `regrouperReactions`).

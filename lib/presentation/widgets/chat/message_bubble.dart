@@ -1560,15 +1560,10 @@ class _ActionsMessage extends StatelessWidget {
   Widget build(BuildContext context) {
     final couleur = Theme.of(context).colorScheme.onSurfaceVariant;
     final fil = timeline;
-    bool mienne(String symbole) =>
-        fil != null &&
-        MatrixService.reactionDeMoi(
-              event,
-              fil,
-              symbole,
-              event.room.client.userID,
-            ) !=
-            null;
+    final mes = fil == null
+        ? const <String, String>{}
+        : MatrixService.mesReactions(event, fil, event.room.client.userID);
+    bool mienne(String symbole) => mes.containsValue(symbole);
 
     Widget bouton({
       required IconData icone,
